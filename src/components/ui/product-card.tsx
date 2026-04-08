@@ -1,10 +1,13 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Heart, ShoppingBag } from "lucide-react";
-import { cn } from "@/lib/utils/cn";
+import { ShoppingBag } from "lucide-react";
+import { WishlistButton } from "@/components/storefront/wishlist-button";
 import { formatPrice } from "@/lib/utils/constants";
+import { useCartStore } from "@/stores/cart-store";
+import { useUIStore } from "@/stores/ui-store";
 import type { Product } from "@/types";
 
 interface ProductCardProps {
@@ -13,10 +16,24 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, index = 0 }: ProductCardProps) {
+  const addItem = useCartStore((state) => state.addItem);
+  const addToast = useUIStore((state) => state.addToast);
   const hasDiscount = product.compare_at_price && product.compare_at_price > product.price;
   const discount = hasDiscount
     ? Math.round((1 - Number(product.price) / Number(product.compare_at_price)) * 100)
     : 0;
+
+  function handleQuickAdd(event: React.MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    addItem(product, undefined, 1);
+    addToast({
+      type: "success",
+      title: "Added to cart",
+      description: `${product.name} is ready in your basket.`,
+    });
+  }
 
   return (
     <motion.div
@@ -28,10 +45,12 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
         {/* Image */}
         <div className="relative aspect-[3/4] overflow-hidden bg-stone-100 dark:bg-stone-800">
           {product.images?.[0] ? (
-            <img
+            <Image
               src={product.images[0]}
               alt={product.name}
-              className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+              fill
+              sizes="(min-width: 1024px) 280px, (min-width: 640px) 45vw, 100vw"
+              className="object-cover transition-transform duration-700 group-hover:scale-105"
             />
           ) : (
             <div className="flex h-full items-center justify-center text-stone-300">
@@ -55,14 +74,16 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
 
           {/* Quick actions */}
           <div className="absolute right-3 top-3 flex flex-col gap-2 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-            <button className="flex h-9 w-9 items-center justify-center bg-white/90 text-stone-700 transition-colors hover:bg-white hover:text-red-500 dark:bg-stone-900/90">
-              <Heart className="h-4 w-4" />
-            </button>
+            <WishlistButton productId={product.id} productName={product.name} />
           </div>
 
           {/* Add to cart on hover */}
           <div className="absolute inset-x-0 bottom-0 translate-y-full transition-transform duration-300 group-hover:translate-y-0">
-            <button className="flex w-full items-center justify-center gap-2 bg-stone-900/95 py-3 text-xs font-medium uppercase tracking-widest text-white backdrop-blur-sm hover:bg-stone-900">
+            <button
+              type="button"
+              onClick={handleQuickAdd}
+              className="flex w-full items-center justify-center gap-2 bg-stone-900/95 py-3 text-xs font-medium uppercase tracking-widest text-white backdrop-blur-sm hover:bg-stone-900"
+            >
               <ShoppingBag className="h-3.5 w-3.5" />
               Add to cart
             </button>

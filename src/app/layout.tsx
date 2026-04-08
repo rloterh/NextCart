@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DM_Sans, Playfair_Display } from "next/font/google";
+import { ToastViewport } from "@/components/ui/toast-viewport";
 import { SupabaseProvider } from "@/components/providers/supabase-provider";
 import "./globals.css";
 
@@ -25,7 +26,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${dmSans.variable} ${playfair.variable}`} suppressHydrationWarning>
       <body className="min-h-screen bg-white font-sans text-stone-900 antialiased dark:bg-stone-950 dark:text-stone-100">
-        <SupabaseProvider>{children}</SupabaseProvider>
+        <SupabaseProvider>
+          {children}
+          <ToastViewport />
+        </SupabaseProvider>
       </body>
     </html>
   );
