@@ -46,6 +46,7 @@ export function ShopPageClient() {
   const [storeName, setStoreName] = useState("");
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const currentSort = searchParams.get("sort") || "newest";
@@ -104,26 +105,51 @@ export function ShopPageClient() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     const sb = getSupabaseBrowserClient();
 
-    const { data: cats } = await sb
+    const { data: cats, error: categoriesError } = await sb
       .from("categories")
       .select("*")
       .eq("is_active", true)
       .is("parent_id", null)
       .order("sort_order");
+
+    if (categoriesError) {
+      setCategories([]);
+      setProducts([]);
+      setTotal(0);
+      setError(categoriesError.message);
+      setLoading(false);
+      return;
+    }
+
     setCategories((cats ?? []) as Category[]);
 
     let query = sb.from("products").select("*, store:stores(id, name, slug, logo_url)", { count: "exact" }).eq("status", "active");
 
     if (currentCategory) {
-      const { data: cat } = await sb.from("categories").select("id").eq("slug", currentCategory).single();
+      const { data: cat, error: categoryLookupError } = await sb.from("categories").select("id").eq("slug", currentCategory).single();
+      if (categoryLookupError && categoryLookupError.code !== "PGRST116") {
+        setProducts([]);
+        setTotal(0);
+        setError(categoryLookupError.message);
+        setLoading(false);
+        return;
+      }
       if (cat) query = query.eq("category_id", cat.id);
     }
 
     if (currentStore) {
       query = query.eq("store_id", currentStore);
-      const { data: store } = await sb.from("stores").select("name").eq("id", currentStore).single();
+      const { data: store, error: storeLookupError } = await sb.from("stores").select("name").eq("id", currentStore).single();
+      if (storeLookupError && storeLookupError.code !== "PGRST116") {
+        setProducts([]);
+        setTotal(0);
+        setError(storeLookupError.message);
+        setLoading(false);
+        return;
+      }
       setStoreName(store?.name ?? "");
     } else {
       setStoreName("");
@@ -157,7 +183,15 @@ export function ShopPageClient() {
     const from = (currentPage - 1) * pageSize;
     query = query.range(from, from + pageSize - 1);
 
-    const { data, count } = await query;
+    const { data, count, error: productsError } = await query;
+    if (productsError) {
+      setProducts([]);
+      setTotal(0);
+      setError(productsError.message);
+      setLoading(false);
+      return;
+    }
+
     setProducts((data ?? []) as Product[]);
     setTotal(count ?? 0);
     setLoading(false);
@@ -192,15 +226,16 @@ export function ShopPageClient() {
   const selectedPriceRangeLabel =
     priceRangeOptions.find((option) => option.min === currentMinPrice && option.max === currentMaxPrice)?.label ?? "";
   const filterSummary = useMemo(
-    () => [
-      currentCategory && `Category: ${categories.find((category) => category.slug === currentCategory)?.name ?? currentCategory}`,
-      currentSearch && `Search: "${currentSearch}"`,
-      currentStore && `Vendor: ${storeName || "Selected vendor"}`,
-      selectedPriceRangeLabel && selectedPriceRangeLabel !== "All prices" ? `Price: ${selectedPriceRangeLabel}` : "",
-      currentRating && `${currentRating}+ stars`,
-      featuredOnly && "Featured picks",
-      inStockOnly && "In stock only",
-    ].filter((item): item is string => Boolean(item)),
+    () =>
+      [
+        currentCategory && `Category: ${categories.find((category) => category.slug === currentCategory)?.name ?? currentCategory}`,
+        currentSearch && `Search: "${currentSearch}"`,
+        currentStore && `Vendor: ${storeName || "Selected vendor"}`,
+        selectedPriceRangeLabel && selectedPriceRangeLabel !== "All prices" ? `Price: ${selectedPriceRangeLabel}` : "",
+        currentRating && `${currentRating}+ stars`,
+        featuredOnly && "Featured picks",
+        inStockOnly && "In stock only",
+      ].filter((item): item is string => Boolean(item)),
     [categories, currentCategory, currentRating, currentSearch, currentStore, featuredOnly, inStockOnly, selectedPriceRangeLabel, storeName]
   );
 
@@ -211,7 +246,7 @@ export function ShopPageClient() {
           <h1 className="font-serif text-3xl text-stone-900 dark:text-white">{pageTitle}</h1>
           <p className="mt-1 text-sm text-stone-500">
             {total} product{total !== 1 ? "s" : ""}
-            {activeFilters > 0 ? ` · ${activeFilters} active filter${activeFilters !== 1 ? "s" : ""}` : ""}
+            {activeFilters > 0 ? ` | ${activeFilters} active filter${activeFilters !== 1 ? "s" : ""}` : ""}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -436,12 +471,35 @@ export function ShopPageClient() {
               </div>
             ) : null}
 
-            <SavedSearchesPanel currentSearch={currentSearch} currentCategory={currentCategory} currentSort={currentSort} />
+            <SavedSearchesPanel
+              currentSearch={currentSearch}
+              currentCategory={currentCategory}
+              currentSort={currentSort}
+              currentStore={currentStore}
+              currentStoreName={storeName}
+              currentMinPrice={currentMinPrice}
+              currentMaxPrice={currentMaxPrice}
+              currentRating={currentRating}
+              featuredOnly={featuredOnly}
+              inStockOnly={inStockOnly}
+            />
           </div>
         </aside>
 
         <div className="flex-1">
-          {loading ? (
+          {error ? (
+            <div className="border border-red-200 bg-red-50 px-6 py-10 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
+              <p className="font-medium">We could not load the shop right now.</p>
+              <p className="mt-2">{error}</p>
+              <button
+                type="button"
+                onClick={() => void fetchData()}
+                className="mt-5 inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
+              >
+                Retry
+              </button>
+            </div>
+          ) : loading ? (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 6 }).map((_, index) => (
                 <div key={index} className="space-y-3">

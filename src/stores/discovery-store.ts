@@ -7,6 +7,12 @@ interface SavedSearch {
   q: string;
   category: string;
   sort: string;
+  store?: string;
+  minPrice?: string;
+  maxPrice?: string;
+  rating?: string;
+  featured?: boolean;
+  inStock?: boolean;
   createdAt: string;
 }
 
@@ -60,17 +66,44 @@ export const useDiscoveryStore = create<DiscoveryState>()(
         const normalizedQuery = input.q.trim();
         const normalizedCategory = input.category.trim();
         const normalizedSort = input.sort.trim();
+        const normalizedStore = input.store?.trim() ?? "";
+        const normalizedMinPrice = input.minPrice?.trim() ?? "";
+        const normalizedMaxPrice = input.maxPrice?.trim() ?? "";
+        const normalizedRating = input.rating?.trim() ?? "";
+        const featured = Boolean(input.featured);
+        const inStock = Boolean(input.inStock);
         const label = input.label.trim() || normalizedQuery || normalizedCategory || "Saved search";
 
         set((state) => {
           const existing = state.savedSearches.find(
-            (item) => item.q === normalizedQuery && item.category === normalizedCategory && item.sort === normalizedSort
+            (item) =>
+              item.q === normalizedQuery &&
+              item.category === normalizedCategory &&
+              item.sort === normalizedSort &&
+              (item.store ?? "") === normalizedStore &&
+              (item.minPrice ?? "") === normalizedMinPrice &&
+              (item.maxPrice ?? "") === normalizedMaxPrice &&
+              (item.rating ?? "") === normalizedRating &&
+              Boolean(item.featured) === featured &&
+              Boolean(item.inStock) === inStock
           );
 
           if (existing) {
             return {
               savedSearches: state.savedSearches.map((item) =>
-                item.id === existing.id ? { ...item, label, createdAt: new Date().toISOString() } : item
+                item.id === existing.id
+                  ? {
+                      ...item,
+                      label,
+                      store: normalizedStore || undefined,
+                      minPrice: normalizedMinPrice || undefined,
+                      maxPrice: normalizedMaxPrice || undefined,
+                      rating: normalizedRating || undefined,
+                      featured,
+                      inStock,
+                      createdAt: new Date().toISOString(),
+                    }
+                  : item
               ),
             };
           }
@@ -83,6 +116,12 @@ export const useDiscoveryStore = create<DiscoveryState>()(
                 q: normalizedQuery,
                 category: normalizedCategory,
                 sort: normalizedSort,
+                store: normalizedStore || undefined,
+                minPrice: normalizedMinPrice || undefined,
+                maxPrice: normalizedMaxPrice || undefined,
+                rating: normalizedRating || undefined,
+                featured,
+                inStock,
                 createdAt: new Date().toISOString(),
               },
               ...state.savedSearches,
