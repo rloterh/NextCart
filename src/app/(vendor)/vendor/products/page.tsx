@@ -1,14 +1,21 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import Image from "next/image";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Plus, Package, MoreHorizontal, Eye, Edit, Archive } from "lucide-react";
+import { Plus, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ProductRowActions } from "@/components/vendor/product-row-actions";
 import { useAuth } from "@/hooks/use-auth";
+import { useUIStore } from "@/stores/ui-store";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatPrice } from "@/lib/utils/constants";
-import type { Product, ProductStatus } from "@/types";
+import type { Category, Product, ProductStatus } from "@/types";
+
+type VendorProduct = Product & {
+  category?: Pick<Category, "id" | "name"> | null;
+};
 
 const statuses: { label: string; value: ProductStatus | "all" }[] = [
   { label: "All", value: "all" },
@@ -27,7 +34,8 @@ const statusColors: Record<string, string> = {
 
 export default function VendorProductsPage() {
   const { store } = useAuth();
-  const [products, setProducts] = useState<Product[]>([]);
+  const addToast = useUIStore((state) => state.addToast);
+  const [products, setProducts] = useState<VendorProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<ProductStatus | "all">("all");
   const [search, setSearch] = useState("");
@@ -35,9 +43,9 @@ export default function VendorProductsPage() {
   const fetchProducts = useCallback(async () => {
     if (!store) return;
     setLoading(true);
-    const sb = getSupabaseBrowserClient();
+    const supabase = getSupabaseBrowserClient();
 
-    let query = sb
+    let query = supabase
       .from("products")
       .select("*, category:categories(id, name)")
       .eq("store_id", store.id)
@@ -47,38 +55,58 @@ export default function VendorProductsPage() {
     if (search) query = query.ilike("name", `%${search}%`);
 
     const { data } = await query;
-    setProducts((data ?? []) as Product[]);
+    setProducts((data ?? []) as VendorProduct[]);
     setLoading(false);
-  }, [store, status, search]);
+  }, [search, status, store]);
 
-  useEffect(() => { fetchProducts(); }, [fetchProducts]);
+  useEffect(() => {
+    void fetchProducts();
+  }, [fetchProducts]);
+
+  async function updateProductStatus(productId: string, nextStatus: ProductStatus) {
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase.from("products").update({ status: nextStatus }).eq("id", productId);
+
+    if (error) {
+      addToast({ type: "error", title: "Unable to update product", description: error.message });
+      return;
+    }
+
+    addToast({
+      type: "success",
+      title: "Product updated",
+      description: `Listing status changed to ${nextStatus}.`,
+    });
+    await fetchProducts();
+  }
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Products</h1>
-          <p className="mt-1 text-sm text-stone-500">{products.length} product{products.length !== 1 ? "s" : ""} in your store</p>
+          <p className="mt-1 text-sm text-stone-500">
+            {products.length} product{products.length !== 1 ? "s" : ""} in your store
+          </p>
         </div>
         <Link href="/vendor/products/new">
           <Button leftIcon={<Plus className="h-4 w-4" />}>Add product</Button>
         </Link>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-1">
-          {statuses.map((s) => (
+          {statuses.map((item) => (
             <button
-              key={s.value}
-              onClick={() => setStatus(s.value)}
+              key={item.value}
+              onClick={() => setStatus(item.value)}
               className={`px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-colors ${
-                status === s.value
+                status === item.value
                   ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900"
                   : "text-stone-500 hover:text-stone-900 dark:hover:text-white"
               }`}
             >
-              {s.label}
+              {item.label}
             </button>
           ))}
         </div>
@@ -86,12 +114,11 @@ export default function VendorProductsPage() {
           type="text"
           placeholder="Search products..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(event) => setSearch(event.target.value)}
           className="h-9 w-64 border-b border-stone-200 bg-transparent text-sm placeholder:text-stone-400 focus:border-stone-900 focus:outline-none dark:border-stone-700"
         />
       </div>
 
-      {/* Product table */}
       <div className="border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
         <table className="w-full">
           <thead>
@@ -107,10 +134,12 @@ export default function VendorProductsPage() {
           </thead>
           <tbody>
             {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i} className="border-b border-stone-50 dark:border-stone-800/50">
-                  {Array.from({ length: 7 }).map((_, j) => (
-                    <td key={j} className="px-4 py-3.5"><div className="h-4 animate-pulse bg-stone-100 dark:bg-stone-800" /></td>
+              Array.from({ length: 5 }).map((_, index) => (
+                <tr key={index} className="border-b border-stone-50 dark:border-stone-800/50">
+                  {Array.from({ length: 7 }).map((_, cellIndex) => (
+                    <td key={cellIndex} className="px-4 py-3.5">
+                      <div className="h-4 animate-pulse bg-stone-100 dark:bg-stone-800" />
+                    </td>
                   ))}
                 </tr>
               ))
@@ -119,7 +148,9 @@ export default function VendorProductsPage() {
                 <td colSpan={7} className="px-4 py-16 text-center">
                   <Package className="mx-auto mb-3 h-8 w-8 text-stone-300" />
                   <p className="font-serif text-lg text-stone-400">No products yet</p>
-                  <Link href="/vendor/products/new"><Button size="sm" className="mt-3">Add your first product</Button></Link>
+                  <Link href="/vendor/products/new">
+                    <Button size="sm" className="mt-3">Add your first product</Button>
+                  </Link>
                 </td>
               </tr>
             ) : (
@@ -129,9 +160,11 @@ export default function VendorProductsPage() {
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 shrink-0 overflow-hidden bg-stone-100 dark:bg-stone-800">
                         {product.images?.[0] ? (
-                          <img src={product.images[0]} alt="" className="h-full w-full object-cover" />
+                          <Image src={product.images[0]} alt="" width={40} height={40} className="h-full w-full object-cover" />
                         ) : (
-                          <div className="flex h-full items-center justify-center text-stone-300"><Package className="h-4 w-4" /></div>
+                          <div className="flex h-full items-center justify-center text-stone-300">
+                            <Package className="h-4 w-4" />
+                          </div>
                         )}
                       </div>
                       <div>
@@ -146,16 +179,12 @@ export default function VendorProductsPage() {
                       {product.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-stone-500">{(product.category as any)?.name ?? "—"}</td>
+                  <td className="px-4 py-3 text-sm text-stone-500">{product.category?.name ?? "—"}</td>
                   <td className="px-4 py-3 text-right text-sm font-medium text-stone-900 dark:text-white">{formatPrice(Number(product.price))}</td>
                   <td className="px-4 py-3 text-right text-sm text-stone-500">{product.stock_quantity}</td>
                   <td className="px-4 py-3 text-right text-sm text-stone-500">{product.sale_count}</td>
                   <td className="px-4 py-3">
-                    <Link href={`/vendor/products/${product.id}`}>
-                      <button className="rounded-sm p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800">
-                        <Edit className="h-4 w-4" />
-                      </button>
-                    </Link>
+                    <ProductRowActions product={product} onStatusChange={updateProductStatus} />
                   </td>
                 </tr>
               ))

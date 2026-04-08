@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
 import { createConnectOnboardingLink } from "@/lib/stripe/server";
 
-export async function POST(request: Request) {
+export async function POST() {
   try {
     const user = await getServerUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
