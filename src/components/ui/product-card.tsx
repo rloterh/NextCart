@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ShoppingBag } from "lucide-react";
+import { CompareButton } from "@/components/storefront/compare-button";
 import { WishlistButton } from "@/components/storefront/wishlist-button";
 import { formatPrice } from "@/lib/utils/constants";
 import { useCartStore } from "@/stores/cart-store";
@@ -75,6 +76,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
           {/* Quick actions */}
           <div className="absolute right-3 top-3 flex flex-col gap-2 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
             <WishlistButton productId={product.id} productName={product.name} />
+            <CompareButton product={product} />
           </div>
 
           {/* Add to cart on hover */}
