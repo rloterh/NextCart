@@ -2,16 +2,27 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Archive, ArchiveRestore, Edit, Eye, MoreHorizontal, PauseCircle, PlayCircle } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  CopyPlus,
+  Edit,
+  Eye,
+  MoreHorizontal,
+  PauseCircle,
+  PlayCircle,
+} from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import type { Product, ProductStatus } from "@/types";
 
 interface ProductRowActionsProps {
   product: Product;
+  isBusy?: boolean;
+  onDuplicate: (productId: string) => Promise<void>;
   onStatusChange: (productId: string, nextStatus: ProductStatus) => Promise<void>;
 }
 
-export function ProductRowActions({ product, onStatusChange }: ProductRowActionsProps) {
+export function ProductRowActions({ product, isBusy = false, onDuplicate, onStatusChange }: ProductRowActionsProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -30,32 +41,39 @@ export function ProductRowActions({ product, onStatusChange }: ProductRowActions
     label: string;
     icon: typeof Eye;
     href?: string;
-    status?: ProductStatus;
+    onClick?: () => Promise<void>;
     tone?: "default" | "warning";
   }> = [
     { label: "Preview live page", icon: Eye, href: `/products/${product.store_id}/${product.slug}` },
     { label: "Edit details", icon: Edit, href: `/vendor/products/${product.id}` },
+    { label: "Duplicate to draft", icon: CopyPlus, onClick: () => onDuplicate(product.id) },
     product.status === "active"
-      ? { label: "Pause listing", icon: PauseCircle, status: "paused" }
-      : { label: "Publish listing", icon: PlayCircle, status: "active" },
+      ? { label: "Pause listing", icon: PauseCircle, onClick: () => onStatusChange(product.id, "paused") }
+      : { label: "Publish listing", icon: PlayCircle, onClick: () => onStatusChange(product.id, "active") },
     product.status === "archived"
-      ? { label: "Restore listing", icon: ArchiveRestore, status: "draft" }
-      : { label: "Archive listing", icon: Archive, status: "archived", tone: "warning" },
+      ? { label: "Restore listing", icon: ArchiveRestore, onClick: () => onStatusChange(product.id, "draft") }
+      : { label: "Archive listing", icon: Archive, onClick: () => onStatusChange(product.id, "archived"), tone: "warning" },
   ];
 
-  async function handleAction(status?: ProductStatus) {
-    if (!status) return;
-    await onStatusChange(product.id, status);
+  async function handleAction(action: () => Promise<void>) {
+    await action();
     setOpen(false);
   }
 
   return (
     <div ref={containerRef} className="relative">
-      <button type="button" onClick={() => setOpen((current) => !current)} className="rounded-sm p-1.5 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800 dark:hover:text-white" aria-expanded={open} aria-label={`Open actions for ${product.name}`}>
+      <button
+        type="button"
+        disabled={isBusy}
+        onClick={() => setOpen((current) => !current)}
+        className="rounded-sm p-1.5 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-stone-800 dark:hover:text-white"
+        aria-expanded={open}
+        aria-label={`Open actions for ${product.name}`}
+      >
         <MoreHorizontal className="h-4 w-4" />
       </button>
 
-      {open && (
+      {open ? (
         <div className="absolute right-0 z-20 mt-2 w-56 border border-stone-200 bg-white p-1.5 shadow-xl dark:border-stone-800 dark:bg-stone-900">
           {actions.map((action) =>
             action.href ? (
@@ -74,9 +92,10 @@ export function ProductRowActions({ product, onStatusChange }: ProductRowActions
               <button
                 key={action.label}
                 type="button"
-                onClick={() => void handleAction(action.status)}
+                disabled={isBusy || !action.onClick}
+                onClick={() => action.onClick && void handleAction(action.onClick)}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-sm px-3 py-2.5 text-left text-sm transition-colors",
+                  "flex w-full items-center gap-3 rounded-sm px-3 py-2.5 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                   action.tone === "warning"
                     ? "text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/30"
                     : "text-stone-600 hover:bg-stone-50 hover:text-stone-900 dark:text-stone-300 dark:hover:bg-stone-800 dark:hover:text-white"
@@ -88,7 +107,7 @@ export function ProductRowActions({ product, onStatusChange }: ProductRowActions
             )
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
