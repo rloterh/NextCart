@@ -42,6 +42,11 @@ export const orderStatusCopy: Record<OrderStatus, OrderStatusContent> = {
     buyerMessage: "Delivery hit an issue and the vendor is reviewing the next step. Keep an eye on this page for the updated plan.",
     vendorMessage: "Delivery failed or was interrupted. Coordinate the next fulfillment step before moving the order forward again.",
   },
+  reshipping: {
+    label: "Reshipping in progress",
+    buyerMessage: "The vendor is arranging a replacement shipment after a delivery issue.",
+    vendorMessage: "A replacement or retry shipment is underway. Keep the buyer updated with the new tracking plan.",
+  },
   delivered: {
     label: "Delivered",
     buyerMessage: "The order was marked delivered. This is the best time to confirm everything arrived as expected and leave a review.",
@@ -51,6 +56,21 @@ export const orderStatusCopy: Record<OrderStatus, OrderStatusContent> = {
     label: "Return initiated",
     buyerMessage: "A return or post-delivery exception has been started. The vendor should share next-step guidance here.",
     vendorMessage: "A return flow has started. Keep buyer communication clear while you work through the exception.",
+  },
+  return_approved: {
+    label: "Return approved",
+    buyerMessage: "The vendor approved the return and should provide the return handoff guidance next.",
+    vendorMessage: "The return is approved. Make the shipping instructions and timeline explicit for the buyer.",
+  },
+  return_in_transit: {
+    label: "Return in transit",
+    buyerMessage: "The return is on the way back to the vendor.",
+    vendorMessage: "The buyer has sent the return back. Track the inbound package until it is received.",
+  },
+  return_received: {
+    label: "Return received",
+    buyerMessage: "The vendor received the return and is finishing the final resolution steps.",
+    vendorMessage: "The return has arrived. Confirm the resolution path, including refund timing if applicable.",
   },
   cancelled: {
     label: "Cancelled",

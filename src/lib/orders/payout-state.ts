@@ -27,7 +27,15 @@ export function getPayoutState(
     };
   }
 
-  if (status === "cancelled" || status === "refunded" || status === "return_initiated" || status === "delivery_failed") {
+  if (
+    status === "cancelled" ||
+    status === "refunded" ||
+    status === "return_initiated" ||
+    status === "return_approved" ||
+    status === "return_in_transit" ||
+    status === "return_received" ||
+    status === "delivery_failed"
+  ) {
     return {
       label: "On hold",
       description: "This order is no longer on a normal payout path and may need vendor review before settlement.",

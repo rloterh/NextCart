@@ -31,7 +31,11 @@ type OrderUpdatePayload = {
   packed_at?: string | null;
   out_for_delivery_at?: string | null;
   delivery_failed_at?: string | null;
+  reshipping_started_at?: string | null;
   return_initiated_at?: string | null;
+  return_approved_at?: string | null;
+  return_in_transit_at?: string | null;
+  return_received_at?: string | null;
   shipped_at?: string;
   delivered_at?: string;
   cancelled_at?: string;
@@ -122,12 +126,30 @@ export default function VendorOrderDetailPage() {
       updates.delivery_failed_at = new Date().toISOString();
     }
 
+    if (status === "reshipping") {
+      updates.reshipping_started_at = new Date().toISOString();
+      updates.tracking_number = null;
+      updates.tracking_url = null;
+    }
+
     if (status === "delivered") {
       updates.delivered_at = new Date().toISOString();
     }
 
     if (status === "return_initiated") {
       updates.return_initiated_at = new Date().toISOString();
+    }
+
+    if (status === "return_approved") {
+      updates.return_approved_at = new Date().toISOString();
+    }
+
+    if (status === "return_in_transit") {
+      updates.return_in_transit_at = new Date().toISOString();
+    }
+
+    if (status === "return_received") {
+      updates.return_received_at = new Date().toISOString();
     }
 
     if (status === "cancelled") {
@@ -204,29 +226,41 @@ export default function VendorOrderDetailPage() {
   const address = order.shipping_address as CheckoutShippingAddress | null;
   const canProcess = order.status === "confirmed";
   const canPack = order.status === "processing";
-  const canShip = order.status === "packed";
+  const canShip = order.status === "packed" || order.status === "reshipping";
   const canMarkOutForDelivery = order.status === "shipped";
   const canDeliver = order.status === "out_for_delivery";
   const canMarkDeliveryFailed = order.status === "shipped" || order.status === "out_for_delivery";
   const canInitiateReturn = order.status === "delivered";
+  const canRetryDelivery = order.status === "delivery_failed";
+  const canApproveReturn = order.status === "return_initiated";
+  const canMarkReturnTransit = order.status === "return_approved";
+  const canMarkReturnReceived = order.status === "return_in_transit";
   const storeProfile = order.store ? getStoreProfileContent(order.store) : null;
   const statusContent = orderStatusCopy[order.status];
   const timeline = [
     { label: "Order placed", timestamp: order.created_at, reached: true, description: "The buyer completed checkout and the order entered your queue." },
     { label: "Confirmed", timestamp: null, reached: order.status !== "pending", description: "Payment and order details were confirmed for vendor handling." },
-    { label: "Processing", timestamp: null, reached: ["processing", "packed", "shipped", "out_for_delivery", "delivered"].includes(order.status), description: "The order is actively being prepared by the vendor team." },
-    { label: "Packed", timestamp: order.packed_at ?? null, reached: ["packed", "shipped", "out_for_delivery", "delivered"].includes(order.status), description: "Packing is complete and the shipment is ready for carrier handoff." },
-    { label: "Shipped", timestamp: order.shipped_at, reached: ["shipped", "out_for_delivery", "delivered"].includes(order.status), description: "Tracking and shipment details have been recorded." },
-    { label: "Out for delivery", timestamp: order.out_for_delivery_at ?? null, reached: ["out_for_delivery", "delivered"].includes(order.status), description: "The carrier is on the final route to the buyer." },
-    { label: "Delivery failed", timestamp: order.delivery_failed_at ?? null, reached: order.status === "delivery_failed", description: "The shipment hit a failed delivery event and needs follow-up." },
-    { label: "Delivered", timestamp: order.delivered_at, reached: order.status === "delivered", description: "The order was marked as delivered." },
-    { label: "Return initiated", timestamp: order.return_initiated_at ?? null, reached: order.status === "return_initiated", description: "A return or exception flow started after delivery." },
+    { label: "Processing", timestamp: null, reached: ["processing", "packed", "shipped", "out_for_delivery", "delivery_failed", "reshipping", "delivered", "return_initiated", "return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), description: "The order is actively being prepared by the vendor team." },
+    { label: "Packed", timestamp: order.packed_at ?? null, reached: ["packed", "shipped", "out_for_delivery", "delivery_failed", "reshipping", "delivered", "return_initiated", "return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), description: "Packing is complete and the shipment is ready for carrier handoff." },
+    { label: "Shipped", timestamp: order.shipped_at, reached: ["shipped", "out_for_delivery", "delivery_failed", "reshipping", "delivered", "return_initiated", "return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), description: "Tracking and shipment details have been recorded." },
+    { label: "Out for delivery", timestamp: order.out_for_delivery_at ?? null, reached: ["out_for_delivery", "delivery_failed", "delivered", "return_initiated", "return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), description: "The carrier is on the final route to the buyer." },
+    { label: "Delivery failed", timestamp: order.delivery_failed_at ?? null, reached: ["delivery_failed", "reshipping"].includes(order.status), description: "The shipment hit a failed delivery event and needs follow-up." },
+    { label: "Reshipping", timestamp: order.reshipping_started_at ?? null, reached: order.status === "reshipping", description: "A retry shipment or replacement handoff is being arranged." },
+    { label: "Delivered", timestamp: order.delivered_at, reached: ["delivered", "return_initiated", "return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), description: "The order was marked as delivered." },
+    { label: "Return initiated", timestamp: order.return_initiated_at ?? null, reached: ["return_initiated", "return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), description: "A return or exception flow started after delivery." },
+    { label: "Return approved", timestamp: order.return_approved_at ?? null, reached: ["return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), description: "The vendor approved the return and shared next-step handling." },
+    { label: "Return in transit", timestamp: order.return_in_transit_at ?? null, reached: ["return_in_transit", "return_received", "refunded"].includes(order.status), description: "The return shipment is on the way back to the vendor." },
+    { label: "Return received", timestamp: order.return_received_at ?? null, reached: ["return_received", "refunded"].includes(order.status), description: "The vendor received the returned goods and can finalize resolution." },
     { label: "Cancelled", timestamp: order.cancelled_at, reached: Boolean(order.cancelled_at), description: "The order was cancelled before completion." },
   ].filter(
     (entry) =>
       (entry.label !== "Cancelled" || order.cancelled_at) &&
       (entry.label !== "Delivery failed" || order.delivery_failed_at) &&
-      (entry.label !== "Return initiated" || order.return_initiated_at)
+      (entry.label !== "Reshipping" || order.reshipping_started_at) &&
+      (entry.label !== "Return initiated" || order.return_initiated_at) &&
+      (entry.label !== "Return approved" || order.return_approved_at) &&
+      (entry.label !== "Return in transit" || order.return_in_transit_at) &&
+      (entry.label !== "Return received" || order.return_received_at)
   );
 
   return (
@@ -271,6 +305,11 @@ export default function VendorOrderDetailPage() {
               Delivery failed
             </Button>
           ) : null}
+          {canRetryDelivery ? (
+            <Button onClick={() => updateStatus("reshipping")} isLoading={updating} variant="outline">
+              Retry shipment
+            </Button>
+          ) : null}
           {canDeliver ? (
             <Button onClick={() => updateStatus("delivered")} isLoading={updating} leftIcon={<CheckCircle2 className="h-4 w-4" />}>
               Mark delivered
@@ -279,6 +318,21 @@ export default function VendorOrderDetailPage() {
           {canInitiateReturn ? (
             <Button onClick={() => updateStatus("return_initiated")} isLoading={updating} variant="outline">
               Initiate return
+            </Button>
+          ) : null}
+          {canApproveReturn ? (
+            <Button onClick={() => updateStatus("return_approved")} isLoading={updating} variant="outline">
+              Approve return
+            </Button>
+          ) : null}
+          {canMarkReturnTransit ? (
+            <Button onClick={() => updateStatus("return_in_transit")} isLoading={updating} variant="outline">
+              Return in transit
+            </Button>
+          ) : null}
+          {canMarkReturnReceived ? (
+            <Button onClick={() => updateStatus("return_received")} isLoading={updating} variant="outline">
+              Return received
             </Button>
           ) : null}
         </div>
@@ -345,7 +399,7 @@ export default function VendorOrderDetailPage() {
       </Card>
 
       <div className="grid gap-6 md:grid-cols-2">
-        {canShip || canMarkOutForDelivery || order.status === "shipped" || order.status === "out_for_delivery" || order.status === "delivered" ? (
+        {canShip || canMarkOutForDelivery || order.status === "shipped" || order.status === "out_for_delivery" || order.status === "delivery_failed" || order.status === "delivered" ? (
           <Card>
             <CardTitle>Tracking information</CardTitle>
             <div className="mt-4">
@@ -391,6 +445,24 @@ export default function VendorOrderDetailPage() {
           </Button>
         </div>
       </Card>
+
+      {order.status === "delivery_failed" || order.status === "reshipping" || order.status === "return_initiated" || order.status === "return_approved" || order.status === "return_in_transit" || order.status === "return_received" ? (
+        <Card>
+          <CardTitle>Exception handling guidance</CardTitle>
+          <div className="mt-3 space-y-3 text-sm text-stone-500">
+            <p>
+              {order.status === "delivery_failed" || order.status === "reshipping"
+                ? "Capture the new shipment plan in notes, refresh tracking when the retry is booked, and keep buyer-facing timing aligned with the latest carrier update."
+                : "Keep return instructions, inbound tracking, and final resolution notes aligned so the buyer always sees the current next step."}
+            </p>
+            <p>
+              {storeProfile?.supportEmail
+                ? `Escalations should route through ${storeProfile.supportEmail}.`
+                : "Use your store support channel for any escalations tied to this exception."}
+            </p>
+          </div>
+        </Card>
+      ) : null}
 
       {address ? (
         <Card>

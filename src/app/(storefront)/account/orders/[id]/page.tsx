@@ -99,13 +99,17 @@ export default function BuyerOrderDetailPage() {
   const timeline = [
     { key: "pending", label: "Order placed", reached: true, timestamp: order.created_at, description: "Checkout completed and payment entered the marketplace workflow." },
     { key: "confirmed", label: "Confirmed", reached: order.status !== "pending", timestamp: null, description: "Payment and order details were confirmed for vendor handling." },
-    { key: "processing", label: "Processing", reached: ["processing", "packed", "shipped", "out_for_delivery", "delivered", "delivery_failed", "return_initiated"].includes(order.status), timestamp: null, description: "The vendor started preparing the order." },
-    { key: "packed", label: "Packed", reached: ["packed", "shipped", "out_for_delivery", "delivered", "delivery_failed", "return_initiated"].includes(order.status), timestamp: order.packed_at ?? null, description: "Packing is complete and the shipment is prepared for carrier handoff." },
-    { key: "shipped", label: "Shipped", reached: ["shipped", "out_for_delivery", "delivered", "delivery_failed", "return_initiated"].includes(order.status), timestamp: order.shipped_at ?? null, description: "Tracking is active and the parcel is moving through the carrier network." },
-    { key: "out_for_delivery", label: "Out for delivery", reached: ["out_for_delivery", "delivered", "delivery_failed", "return_initiated"].includes(order.status), timestamp: order.out_for_delivery_at ?? null, description: "The carrier is on the final route for delivery." },
+    { key: "processing", label: "Processing", reached: ["processing", "packed", "shipped", "out_for_delivery", "delivery_failed", "reshipping", "delivered", "return_initiated", "return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), timestamp: null, description: "The vendor started preparing the order." },
+    { key: "packed", label: "Packed", reached: ["packed", "shipped", "out_for_delivery", "delivery_failed", "reshipping", "delivered", "return_initiated", "return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), timestamp: order.packed_at ?? null, description: "Packing is complete and the shipment is prepared for carrier handoff." },
+    { key: "shipped", label: "Shipped", reached: ["shipped", "out_for_delivery", "delivery_failed", "reshipping", "delivered", "return_initiated", "return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), timestamp: order.shipped_at ?? null, description: "Tracking is active and the parcel is moving through the carrier network." },
+    { key: "out_for_delivery", label: "Out for delivery", reached: ["out_for_delivery", "delivery_failed", "reshipping", "delivered", "return_initiated", "return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), timestamp: order.out_for_delivery_at ?? null, description: "The carrier is on the final route for delivery." },
     { key: "delivery_failed", label: "Delivery issue", reached: order.status === "delivery_failed", timestamp: order.delivery_failed_at ?? null, description: "The shipment hit a failed delivery event and the vendor is reviewing the next step." },
-    { key: "delivered", label: "Delivered", reached: order.status === "delivered" || order.status === "return_initiated", timestamp: order.delivered_at ?? null, description: "Delivery was completed and the order is ready for follow-up or review." },
-    { key: "return_initiated", label: "Return initiated", reached: order.status === "return_initiated", timestamp: order.return_initiated_at ?? null, description: "A return or post-delivery exception was started on this order." },
+    { key: "reshipping", label: "Reshipping", reached: order.status === "reshipping", timestamp: order.reshipping_started_at ?? null, description: "The vendor is arranging a retry shipment after the failed delivery." },
+    { key: "delivered", label: "Delivered", reached: ["delivered", "return_initiated", "return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), timestamp: order.delivered_at ?? null, description: "Delivery was completed and the order is ready for follow-up or review." },
+    { key: "return_initiated", label: "Return initiated", reached: ["return_initiated", "return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), timestamp: order.return_initiated_at ?? null, description: "A return or post-delivery exception was started on this order." },
+    { key: "return_approved", label: "Return approved", reached: ["return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), timestamp: order.return_approved_at ?? null, description: "The vendor approved the return and shared the next handoff details." },
+    { key: "return_in_transit", label: "Return in transit", reached: ["return_in_transit", "return_received", "refunded"].includes(order.status), timestamp: order.return_in_transit_at ?? null, description: "The return shipment is on the way back to the vendor." },
+    { key: "return_received", label: "Return received", reached: ["return_received", "refunded"].includes(order.status), timestamp: order.return_received_at ?? null, description: "The vendor received the returned goods and is finishing the resolution." },
   ];
 
   return (
@@ -272,6 +276,17 @@ export default function BuyerOrderDetailPage() {
               Track shipment
             </a>
           ) : null}
+        </Card>
+      ) : null}
+
+      {order.status === "delivery_failed" || order.status === "reshipping" || order.status === "return_initiated" || order.status === "return_approved" || order.status === "return_in_transit" || order.status === "return_received" ? (
+        <Card>
+          <CardTitle>Resolution update</CardTitle>
+          <p className="mt-3 text-sm leading-relaxed text-stone-500">
+            {order.status === "delivery_failed" || order.status === "reshipping"
+              ? "The vendor is actively reviewing the failed delivery and should share the replacement shipment details here once the retry is booked."
+              : "The return is moving through the vendor’s resolution flow. Keep checking this page for the next confirmed milestone."}
+          </p>
         </Card>
       ) : null}
     </motion.div>

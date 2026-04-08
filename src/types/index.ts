@@ -13,8 +13,12 @@ export type OrderStatus =
   | "shipped"
   | "out_for_delivery"
   | "delivery_failed"
+  | "reshipping"
   | "delivered"
   | "return_initiated"
+  | "return_approved"
+  | "return_in_transit"
+  | "return_received"
   | "cancelled"
   | "refunded";
 

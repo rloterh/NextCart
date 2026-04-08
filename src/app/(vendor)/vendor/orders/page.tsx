@@ -11,7 +11,23 @@ import { formatDate, formatPrice } from "@/lib/utils/constants";
 import type { Order, OrderItem } from "@/types/orders";
 import type { OrderStatus, Profile } from "@/types";
 
-const statuses: Array<OrderStatus | "all"> = ["all", "pending", "confirmed", "processing", "packed", "shipped", "out_for_delivery", "delivery_failed", "delivered", "return_initiated", "cancelled"];
+const statuses: Array<OrderStatus | "all"> = [
+  "all",
+  "pending",
+  "confirmed",
+  "processing",
+  "packed",
+  "shipped",
+  "out_for_delivery",
+  "delivery_failed",
+  "reshipping",
+  "delivered",
+  "return_initiated",
+  "return_approved",
+  "return_in_transit",
+  "return_received",
+  "cancelled",
+];
 
 const savedViews = [
   { label: "All orders", value: "all" },
@@ -32,8 +48,12 @@ const statusColors: Record<OrderStatus, string> = {
   shipped: "bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400",
   out_for_delivery: "bg-cyan-50 text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-300",
   delivery_failed: "bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300",
+  reshipping: "bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-900/20 dark:text-fuchsia-300",
   delivered: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400",
   return_initiated: "bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300",
+  return_approved: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300",
+  return_in_transit: "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300",
+  return_received: "bg-lime-50 text-lime-700 dark:bg-lime-900/20 dark:text-lime-300",
   cancelled: "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400",
   refunded: "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400",
 };
@@ -120,11 +140,11 @@ export default function VendorOrdersPage() {
 
       switch (savedView) {
         case "ready_to_ship":
-          return order.status === "processing" || order.status === "packed";
+          return order.status === "processing" || order.status === "packed" || order.status === "reshipping";
         case "in_transit":
           return order.status === "shipped" || order.status === "out_for_delivery";
         case "exceptions":
-          return order.status === "delivery_failed" || order.status === "return_initiated" || order.status === "cancelled" || order.status === "refunded";
+          return ["delivery_failed", "return_initiated", "return_approved", "return_in_transit", "return_received", "cancelled", "refunded"].includes(order.status);
         case "payout_ready":
           return order.status === "delivered" && !order.stripe_transfer_id;
         case "settled":
