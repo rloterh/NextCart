@@ -8,14 +8,16 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Mail, MapPin, Truck } from "lucide-react";
 import { Card, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
+import { renderOrderCommunicationTemplate } from "@/lib/orders/communication-templates";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatDate, formatPrice } from "@/lib/utils/constants";
 import { orderStatusCopy } from "@/lib/orders/status-copy";
 import { getStoreProfileContent } from "@/lib/storefront/store-profile";
 import type { Store } from "@/types";
+import { ORDER_STATUS_CONFIG } from "@/types/orders";
 import type { CheckoutShippingAddress, Order, OrderItem } from "@/types/orders";
 
-const statusSteps = ["pending", "confirmed", "processing", "shipped", "delivered"] as const;
+const statusSteps = ["pending", "confirmed", "processing", "packed", "shipped", "out_for_delivery", "delivered"] as const;
 
 type BuyerOrderDetail = Order & {
   store: Pick<Store, "name" | "slug" | "settings"> | null;
@@ -91,10 +93,53 @@ export default function BuyerOrderDetailPage() {
     );
   }
 
-  const currentStep = statusSteps.indexOf(order.status as (typeof statusSteps)[number]);
+  const progressStatus =
+    order.status === "delivery_failed" || order.status === "reshipping"
+      ? "out_for_delivery"
+      : order.status === "return_initiated" ||
+          order.status === "return_approved" ||
+          order.status === "return_in_transit" ||
+          order.status === "return_received"
+        ? "delivered"
+        : order.status;
+  const currentStep = statusSteps.indexOf(progressStatus as (typeof statusSteps)[number]);
   const address = order.shipping_address as CheckoutShippingAddress | null;
   const storeProfile = order.store ? getStoreProfileContent(order.store) : null;
   const statusContent = orderStatusCopy[order.status];
+  const communicationStatus =
+    order.status === "reshipping" ||
+    order.status === "return_initiated" ||
+    order.status === "return_approved" ||
+    order.status === "return_in_transit" ||
+    order.status === "return_received"
+      ? order.status
+      : null;
+  const resolutionTemplate = communicationStatus
+    ? renderOrderCommunicationTemplate(communicationStatus, storeProfile, {
+        orderNumber: order.order_number,
+        storeName: order.store?.name ?? null,
+        supportEmail: storeProfile?.supportEmail,
+        trackingNumber: order.tracking_number,
+        trackingUrl: order.tracking_url,
+        returnsPolicy: storeProfile?.returnsPolicy,
+        processingTime: storeProfile?.processingTime,
+      })
+    : null;
+  const timeline = [
+    { key: "pending", label: "Order placed", reached: true, timestamp: order.created_at, description: "Checkout completed and payment entered the marketplace workflow." },
+    { key: "confirmed", label: "Confirmed", reached: order.status !== "pending", timestamp: null, description: "Payment and order details were confirmed for vendor handling." },
+    { key: "processing", label: "Processing", reached: ["processing", "packed", "shipped", "out_for_delivery", "delivery_failed", "reshipping", "delivered", "return_initiated", "return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), timestamp: null, description: "The vendor started preparing the order." },
+    { key: "packed", label: "Packed", reached: ["packed", "shipped", "out_for_delivery", "delivery_failed", "reshipping", "delivered", "return_initiated", "return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), timestamp: order.packed_at ?? null, description: "Packing is complete and the shipment is prepared for carrier handoff." },
+    { key: "shipped", label: "Shipped", reached: ["shipped", "out_for_delivery", "delivery_failed", "reshipping", "delivered", "return_initiated", "return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), timestamp: order.shipped_at ?? null, description: "Tracking is active and the parcel is moving through the carrier network." },
+    { key: "out_for_delivery", label: "Out for delivery", reached: ["out_for_delivery", "delivery_failed", "reshipping", "delivered", "return_initiated", "return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), timestamp: order.out_for_delivery_at ?? null, description: "The carrier is on the final route for delivery." },
+    { key: "delivery_failed", label: "Delivery issue", reached: order.status === "delivery_failed", timestamp: order.delivery_failed_at ?? null, description: "The shipment hit a failed delivery event and the vendor is reviewing the next step." },
+    { key: "reshipping", label: "Reshipping", reached: order.status === "reshipping", timestamp: order.reshipping_started_at ?? null, description: "The vendor is arranging a retry shipment after the failed delivery." },
+    { key: "delivered", label: "Delivered", reached: ["delivered", "return_initiated", "return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), timestamp: order.delivered_at ?? null, description: "Delivery was completed and the order is ready for follow-up or review." },
+    { key: "return_initiated", label: "Return initiated", reached: ["return_initiated", "return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), timestamp: order.return_initiated_at ?? null, description: "A return or post-delivery exception was started on this order." },
+    { key: "return_approved", label: "Return approved", reached: ["return_approved", "return_in_transit", "return_received", "refunded"].includes(order.status), timestamp: order.return_approved_at ?? null, description: "The vendor approved the return and shared the next handoff details." },
+    { key: "return_in_transit", label: "Return in transit", reached: ["return_in_transit", "return_received", "refunded"].includes(order.status), timestamp: order.return_in_transit_at ?? null, description: "The return shipment is on the way back to the vendor." },
+    { key: "return_received", label: "Return received", reached: ["return_received", "refunded"].includes(order.status), timestamp: order.return_received_at ?? null, description: "The vendor received the returned goods and is finishing the resolution." },
+  ];
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-3xl space-y-6 px-6 py-8">
@@ -140,7 +185,25 @@ export default function BuyerOrderDetailPage() {
           </div>
           <div className="mt-2 flex justify-between text-[10px] uppercase tracking-widest text-stone-400">
             {statusSteps.map((step) => (
-              <span key={step}>{step}</span>
+              <span key={step}>{ORDER_STATUS_CONFIG[step].label}</span>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
+      {order.status !== "cancelled" && order.status !== "refunded" ? (
+        <Card>
+          <CardTitle>Fulfillment timeline</CardTitle>
+          <div className="mt-4 space-y-4">
+            {timeline.map((entry) => (
+              <div key={entry.key} className="flex gap-3">
+                <div className={`mt-1 h-2.5 w-2.5 rounded-full ${entry.reached ? "bg-stone-900 dark:bg-white" : "bg-stone-200 dark:bg-stone-700"}`} />
+                <div>
+                  <p className="text-sm font-medium text-stone-900 dark:text-white">{entry.label}</p>
+                  <p className="mt-1 text-xs text-stone-400">{entry.timestamp ? formatDate(entry.timestamp) : entry.reached ? "Completed in workflow" : "Waiting on this milestone"}</p>
+                  <p className="mt-1 text-sm text-stone-500">{entry.description}</p>
+                </div>
+              </div>
             ))}
           </div>
         </Card>
@@ -212,11 +275,22 @@ export default function BuyerOrderDetailPage() {
           </div>
           <div className="mt-3 space-y-3 text-sm text-stone-600 dark:text-stone-400">
             <p>{storeProfile?.shippingNote || "Shipping, packaging, and support context will continue to appear here as the vendor updates the order."}</p>
-            <p>{storeProfile?.processingTime || "You can revisit this page any time to confirm whether the order has moved from confirmation into shipment."}</p>
+            <p>{storeProfile?.processingTime || "You can revisit this page any time to confirm whether the order has moved from packing into final delivery."}</p>
             {storeProfile?.supportEmail ? <p className="text-stone-900 dark:text-white">Support: {storeProfile.supportEmail}</p> : null}
           </div>
         </Card>
       </div>
+
+      {order.status === "delivery_failed" || order.status === "return_initiated" ? (
+        <Card>
+          <CardTitle>Exception guidance</CardTitle>
+          <p className="mt-3 text-sm leading-relaxed text-stone-500">
+            {order.status === "delivery_failed"
+              ? "The vendor is reviewing the failed delivery event and should update this page once the new delivery plan is confirmed."
+              : "A return or post-delivery exception is underway. Keep this order page and your support messages aligned while the next step is confirmed."}
+          </p>
+        </Card>
+      ) : null}
 
       {order.tracking_number ? (
         <Card>
@@ -231,6 +305,24 @@ export default function BuyerOrderDetailPage() {
               Track shipment
             </a>
           ) : null}
+        </Card>
+      ) : null}
+
+      {resolutionTemplate ? (
+        <Card>
+          <CardTitle>Resolution update</CardTitle>
+          <p className="mt-3 text-sm leading-relaxed text-stone-500">{resolutionTemplate}</p>
+        </Card>
+      ) : null}
+
+      {!resolutionTemplate && (order.status === "delivery_failed" || order.status === "reshipping" || order.status === "return_initiated" || order.status === "return_approved" || order.status === "return_in_transit" || order.status === "return_received") ? (
+        <Card>
+          <CardTitle>Resolution update</CardTitle>
+          <p className="mt-3 text-sm leading-relaxed text-stone-500">
+            {order.status === "delivery_failed" || order.status === "reshipping"
+              ? "The vendor is actively reviewing the failed delivery and should share the replacement shipment details here once the retry is booked."
+              : "The return is moving through the vendor’s resolution flow. Keep checking this page for the next confirmed milestone."}
+          </p>
         </Card>
       ) : null}
     </motion.div>

@@ -15,6 +15,14 @@ function getSupabaseAdminClient() {
   return createClient(supabaseUrl, serviceRoleKey);
 }
 
+function getOrderIdFromTransferGroup(value: string | null | undefined) {
+  if (!value || !value.startsWith("order_")) {
+    return null;
+  }
+
+  return value.replace("order_", "") || null;
+}
+
 export async function POST(request: Request) {
   const body = await request.text();
   const headersList = await headers();
@@ -36,7 +44,22 @@ export async function POST(request: Request) {
         const pi = event.data.object as Stripe.PaymentIntent;
         const orderId = pi.metadata?.order_id;
         if (orderId) {
-          await supabaseAdmin.from("orders").update({ status: "confirmed" }).eq("id", orderId);
+          const stripe = getStripeServerClient();
+          const expandedIntent =
+            pi.latest_charge && typeof pi.latest_charge === "string"
+              ? await stripe.paymentIntents.retrieve(pi.id, { expand: ["latest_charge"] })
+              : pi;
+          const latestCharge = typeof expandedIntent.latest_charge === "object" ? expandedIntent.latest_charge : null;
+          const transferId = typeof latestCharge?.transfer === "string" ? latestCharge.transfer : null;
+
+          await supabaseAdmin
+            .from("orders")
+            .update({
+              status: "confirmed",
+              stripe_transfer_id: transferId,
+              stripe_transfer_status: transferId ? "pending" : null,
+            })
+            .eq("id", orderId);
         }
         break;
       }
@@ -52,6 +75,38 @@ export async function POST(request: Request) {
         const account = event.data.object as Stripe.Account;
         if (account.charges_enabled && account.payouts_enabled) {
           await supabaseAdmin.from("stores").update({ status: "approved" }).eq("stripe_account_id", account.id);
+        }
+        break;
+      }
+      case "transfer.created":
+      case "transfer.updated": {
+        const transfer = event.data.object as Stripe.Transfer;
+        const orderId = transfer.metadata?.order_id ?? getOrderIdFromTransferGroup(transfer.transfer_group);
+
+        if (orderId) {
+          await supabaseAdmin
+            .from("orders")
+            .update({
+              stripe_transfer_id: transfer.id,
+              stripe_transfer_status: transfer.reversed ? "reversed" : transfer.destination_payment ? "paid" : "pending",
+              payout_reconciled_at: new Date().toISOString(),
+            })
+            .eq("id", orderId);
+        }
+        break;
+      }
+      case "transfer.reversed": {
+        const transfer = event.data.object as Stripe.Transfer;
+        const transferId = transfer.id;
+
+        if (transferId) {
+          await supabaseAdmin
+            .from("orders")
+            .update({
+              stripe_transfer_status: "reversed",
+              payout_reconciled_at: new Date().toISOString(),
+            })
+            .eq("stripe_transfer_id", transferId);
         }
         break;
       }

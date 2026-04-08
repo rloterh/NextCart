@@ -26,7 +26,7 @@ export default function VendorProductDetailPage() {
       const supabase = getSupabaseBrowserClient();
       const { data } = await supabase
         .from("products")
-        .select("*")
+        .select("*, variants:product_variants(*)")
         .eq("id", id)
         .eq("store_id", store.id)
         .single();

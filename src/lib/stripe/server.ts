@@ -55,6 +55,7 @@ export async function createCheckoutPaymentIntent(params: {
     payment_method_types: ["card"],
     application_fee_amount: platformFee,
     transfer_data: { destination: params.vendorStripeAccountId },
+    transfer_group: `order_${params.orderId}`,
     metadata: { order_id: params.orderId },
     receipt_email: params.buyerEmail,
   });

@@ -5,7 +5,22 @@
 export type UserRole = "buyer" | "vendor" | "admin";
 export type VendorStatus = "pending" | "approved" | "rejected" | "suspended";
 export type ProductStatus = "draft" | "active" | "paused" | "archived";
-export type OrderStatus = "pending" | "confirmed" | "processing" | "shipped" | "delivered" | "cancelled" | "refunded";
+export type OrderStatus =
+  | "pending"
+  | "confirmed"
+  | "processing"
+  | "packed"
+  | "shipped"
+  | "out_for_delivery"
+  | "delivery_failed"
+  | "reshipping"
+  | "delivered"
+  | "return_initiated"
+  | "return_approved"
+  | "return_in_transit"
+  | "return_received"
+  | "cancelled"
+  | "refunded";
 
 export interface Profile {
   id: string;
