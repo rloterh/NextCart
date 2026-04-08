@@ -82,11 +82,19 @@ export function buildDuplicateSku(value: string | null | undefined, suffix = "CO
 }
 
 export function buildDuplicateSlug(baseName: string, attempt = 0) {
-  const baseSlug = slugify(baseName);
+  const baseSlug = slugify(baseName) || "product";
   if (attempt === 0) {
     return `${baseSlug}-copy`;
   }
   return `${baseSlug}-copy-${attempt + 1}`;
+}
+
+export function isProductSlugConflict(error: { code?: string; message?: string } | null | undefined) {
+  if (!error) {
+    return false;
+  }
+
+  return error.code === "23505" || error.message?.toLowerCase().includes("idx_products_slug") || false;
 }
 
 export async function ensureUniqueProductSlug({
@@ -99,7 +107,7 @@ export async function ensureUniqueProductSlug({
   currentProductId?: string;
 }) {
   const supabase = getSupabaseBrowserClient();
-  const baseSlug = slugify(baseName);
+  const baseSlug = slugify(baseName) || "product";
 
   for (let attempt = 0; attempt < 25; attempt += 1) {
     const candidate = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;

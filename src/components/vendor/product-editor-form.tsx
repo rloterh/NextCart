@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { uploadProductImage } from "@/lib/supabase/storage";
-import { ensureUniqueProductSlug, getInventorySummary, textToVariantOptions, toEditableVariant, type EditableVariant } from "@/lib/vendor/catalog";
+import { ensureUniqueProductSlug, getInventorySummary, isProductSlugConflict, textToVariantOptions, toEditableVariant, type EditableVariant } from "@/lib/vendor/catalog";
 import { formatPrice, slugify } from "@/lib/utils/constants";
 import { useUIStore } from "@/stores/ui-store";
 import type { Category, Product, ProductStatus, ProductVariant } from "@/types";
@@ -222,15 +222,9 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
     }));
 
     const supabase = getSupabaseBrowserClient();
-    const resolvedSlug = await ensureUniqueProductSlug({
-      storeId: store.id,
-      baseName: form.name.trim(),
-      currentProductId: mode === "edit" ? product?.id : undefined,
-    });
-    const payload = {
+    const basePayload = {
       store_id: store.id,
       name: form.name.trim(),
-      slug: resolvedSlug,
       description: form.description.trim() || null,
       short_description: form.shortDescription.trim() || null,
       price: Number(form.price),
@@ -249,16 +243,48 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
     setIsLoading(true);
 
     try {
-      const response =
-        mode === "create"
-          ? await supabase.from("products").insert(payload).select("*, variants:product_variants(*)").single()
-          : await supabase
-              .from("products")
-              .update(payload)
-              .eq("id", product?.id ?? "")
-              .eq("store_id", store.id)
-              .select("*, variants:product_variants(*)")
-              .single();
+      let response:
+        | {
+            data: Product | null;
+            error: {
+              code?: string;
+              message: string;
+            } | null;
+          }
+        | undefined;
+      let resolvedSlug = slugPreview;
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        resolvedSlug = await ensureUniqueProductSlug({
+          storeId: store.id,
+          baseName: form.name.trim(),
+          currentProductId: mode === "edit" ? product?.id : undefined,
+        });
+
+        const payload = {
+          ...basePayload,
+          slug: resolvedSlug,
+        };
+
+        response =
+          mode === "create"
+            ? await supabase.from("products").insert(payload).select("*, variants:product_variants(*)").single()
+            : await supabase
+                .from("products")
+                .update(payload)
+                .eq("id", product?.id ?? "")
+                .eq("store_id", store.id)
+                .select("*, variants:product_variants(*)")
+                .single();
+
+        if (!response.error || !isProductSlugConflict(response.error)) {
+          break;
+        }
+      }
+
+      if (!response) {
+        throw new Error("Unable to prepare product save request.");
+      }
 
       if (response.error || !response.data) {
         throw new Error(response.error?.message ?? "Unable to save product.");
