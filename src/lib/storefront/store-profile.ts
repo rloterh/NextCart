@@ -20,7 +20,7 @@ function readSetting(settings: Record<string, unknown>, key: string) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-export function getStoreProfileContent(store: Pick<Store, "settings" | "status" | "rating_count" | "rating_avg" | "total_orders">): StoreProfileContent {
+export function getStoreProfileContent(store: Pick<Store, "settings">): StoreProfileContent {
   const settings = typeof store.settings === "object" && store.settings ? store.settings : {};
   const rawHighlights = Array.isArray(settings.policyHighlights) ? settings.policyHighlights : [];
 

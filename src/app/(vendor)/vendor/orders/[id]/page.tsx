@@ -5,19 +5,22 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, CheckCircle2, MapPin, Package, Truck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Mail, MapPin, Package, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatDate, formatPrice } from "@/lib/utils/constants";
+import { orderStatusCopy } from "@/lib/orders/status-copy";
+import { getStoreProfileContent } from "@/lib/storefront/store-profile";
 import { useUIStore } from "@/stores/ui-store";
-import type { Profile } from "@/types";
+import type { Profile, Store } from "@/types";
 import type { CheckoutShippingAddress, Order, OrderItem } from "@/types/orders";
 
 type VendorOrderDetail = Order & {
   buyer: Pick<Profile, "full_name" | "email"> | null;
+  store: Pick<Store, "name" | "settings"> | null;
   items: OrderItem[];
 };
 
@@ -53,7 +56,7 @@ export default function VendorOrderDetailPage() {
       const sb = getSupabaseBrowserClient();
       const { data, error: queryError } = await sb
         .from("orders")
-        .select("*, buyer:profiles(full_name, email), items:order_items(*)")
+        .select("*, buyer:profiles(full_name, email), store:stores(name, settings), items:order_items(*)")
         .eq("id", id)
         .eq("store_id", store.id)
         .single();
@@ -154,6 +157,8 @@ export default function VendorOrderDetailPage() {
   const canProcess = order.status === "confirmed";
   const canShip = order.status === "processing";
   const canDeliver = order.status === "shipped";
+  const storeProfile = order.store ? getStoreProfileContent(order.store) : null;
+  const statusContent = orderStatusCopy[order.status];
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-3xl space-y-6">
@@ -191,20 +196,18 @@ export default function VendorOrderDetailPage() {
       </div>
 
       <Card>
+        <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Buyer-facing status</p>
+        <h2 className="mt-2 font-serif text-2xl text-stone-900 dark:text-white">{statusContent.label}</h2>
+        <p className="mt-2 text-sm leading-relaxed text-stone-500">{statusContent.vendorMessage}</p>
+      </Card>
+
+      <Card>
         <CardTitle>Order items</CardTitle>
         <div className="mt-4 divide-y divide-stone-100 dark:divide-stone-800">
           {order.items.map((item) => (
             <div key={item.id} className="flex items-center gap-4 py-3">
               <div className="relative h-14 w-12 shrink-0 overflow-hidden bg-stone-100 dark:bg-stone-800">
-                {item.product_image ? (
-                  <Image
-                    src={item.product_image}
-                    alt={item.product_name}
-                    fill
-                    sizes="48px"
-                    className="object-cover"
-                  />
-                ) : null}
+                {item.product_image ? <Image src={item.product_image} alt={item.product_name} fill sizes="48px" className="object-cover" /> : null}
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium text-stone-900 dark:text-white">{item.product_name}</p>
@@ -236,19 +239,29 @@ export default function VendorOrderDetailPage() {
         </div>
       </Card>
 
-      {canShip || order.status === "shipped" ? (
+      <div className="grid gap-6 md:grid-cols-2">
+        {canShip || order.status === "shipped" ? (
+          <Card>
+            <CardTitle>Tracking information</CardTitle>
+            <div className="mt-4">
+              <Input label="Tracking number" value={tracking} onChange={(event) => setTracking(event.target.value)} placeholder="Enter tracking number" />
+            </div>
+            <p className="mt-3 text-sm text-stone-500">The buyer sees shipment progress here as soon as you add and save tracking.</p>
+          </Card>
+        ) : null}
+
         <Card>
-          <CardTitle>Tracking information</CardTitle>
-          <div className="mt-4">
-            <Input
-              label="Tracking number"
-              value={tracking}
-              onChange={(event) => setTracking(event.target.value)}
-              placeholder="Enter tracking number"
-            />
+          <div className="flex items-center gap-2">
+            <Mail className="h-4 w-4 text-stone-400" />
+            <CardTitle>Communication cues</CardTitle>
+          </div>
+          <div className="mt-3 space-y-3 text-sm text-stone-600 dark:text-stone-400">
+            <p>{storeProfile?.shippingNote || "Use status and tracking updates to keep the buyer informed from confirmation through shipment."}</p>
+            <p>{storeProfile?.processingTime || "If fulfillment timing changes, align your shipment updates with the actual processing timeline."}</p>
+            {storeProfile?.supportEmail ? <p className="text-stone-900 dark:text-white">Store support: {storeProfile.supportEmail}</p> : null}
           </div>
         </Card>
-      ) : null}
+      </div>
 
       {address ? (
         <Card>

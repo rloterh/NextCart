@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { CreditCard, Lock } from "lucide-react";
+import { CreditCard, Lock, Mail, ShieldCheck, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,8 @@ export default function CheckoutPage() {
   const shipping = sub >= 75 ? 0 : 9.99;
   const tax = Math.round(sub * 0.085 * 100) / 100;
   const total = sub + shipping + tax;
+
+  const vendorCount = useMemo(() => new Set(items.map((item) => item.product.store_id)).size, [items]);
 
   const setField = (key: keyof CheckoutShippingAddress, value: string) => {
     setAddress((prev) => ({ ...prev, [key]: value }));
@@ -93,7 +95,12 @@ export default function CheckoutPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
-      <h1 className="font-serif text-3xl text-stone-900 dark:text-white">Checkout</h1>
+      <div className="max-w-2xl">
+        <h1 className="font-serif text-3xl text-stone-900 dark:text-white">Checkout</h1>
+        <p className="mt-3 text-sm leading-relaxed text-stone-500">
+          Secure your order with clear shipping expectations, Stripe-protected payment handling, and post-purchase updates that keep every step visible.
+        </p>
+      </div>
 
       <form onSubmit={handleCheckout} className="mt-8 grid gap-8 lg:grid-cols-5">
         <div className="space-y-6 lg:col-span-3">
@@ -121,7 +128,36 @@ export default function CheckoutPage() {
               Stripe Elements integration - card form renders here in production
             </div>
             <div className="mt-3 flex items-center gap-1.5 text-xs text-stone-400">
-              <Lock className="h-3 w-3" /> Secured by Stripe. Your data is encrypted.
+              <Lock className="h-3 w-3" /> Secured by Stripe. Your data is encrypted and payment is split correctly for each marketplace vendor.
+            </div>
+          </Card>
+
+          <Card>
+            <h2 className="mb-4 text-xs font-medium uppercase tracking-widest text-stone-400">What happens next</h2>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {[
+                {
+                  icon: ShieldCheck,
+                  title: "Payment confirmation",
+                  description: "You will get an order confirmation after the payment intent is created and accepted.",
+                },
+                {
+                  icon: Truck,
+                  title: "Shipping updates",
+                  description: `Orders from ${vendorCount} ${vendorCount === 1 ? "vendor" : "vendors"} will move through confirmation, processing, and shipment with visible status updates.`,
+                },
+                {
+                  icon: Mail,
+                  title: "Support clarity",
+                  description: "Store-specific tracking or service details will appear in your order history after purchase.",
+                },
+              ].map((item) => (
+                <div key={item.title} className="border border-stone-200 p-4 dark:border-stone-700">
+                  <item.icon className="h-4 w-4 text-amber-700 dark:text-amber-500" />
+                  <p className="mt-3 text-sm font-medium text-stone-900 dark:text-white">{item.title}</p>
+                  <p className="mt-2 text-xs leading-relaxed text-stone-500">{item.description}</p>
+                </div>
+              ))}
             </div>
           </Card>
         </div>
@@ -163,8 +199,11 @@ export default function CheckoutPage() {
                 <span className="text-lg font-medium">{formatPrice(total)}</span>
               </div>
             </div>
+            <div className="mt-4 border-t border-stone-200 pt-4 text-xs leading-relaxed text-stone-500 dark:border-stone-700">
+              Shipping confirmation, tracking details, and support context will be available from your order history after purchase.
+            </div>
             <Button type="submit" isLoading={loading} className="mt-6 w-full" size="lg">
-              Place order
+              Place secure order
             </Button>
           </div>
         </div>
