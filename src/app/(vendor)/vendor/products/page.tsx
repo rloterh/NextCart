@@ -68,6 +68,8 @@ export default function VendorProductsPage() {
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
   const [activeBulkStatus, setActiveBulkStatus] = useState<ProductStatus | null>(null);
   const [inventoryDrafts, setInventoryDrafts] = useState<Record<string, string>>({});
+  const [bulkInventoryAdjustment, setBulkInventoryAdjustment] = useState("0");
+  const [isBulkInventoryUpdating, setIsBulkInventoryUpdating] = useState(false);
 
   const fetchProducts = useCallback(async () => {
     if (!store) return;
@@ -199,6 +201,76 @@ export default function VendorProductsPage() {
     });
     setSelectedIds([]);
     setActiveBulkStatus(null);
+    await fetchProducts();
+  }
+
+  async function applyBulkInventoryAdjustment(direction: "increase" | "decrease") {
+    if (selectedIds.length === 0) {
+      addToast({
+        type: "info",
+        title: "Select products first",
+        description: "Choose one or more listings before applying a bulk inventory adjustment.",
+      });
+      return;
+    }
+
+    const adjustmentAmount = Number(bulkInventoryAdjustment);
+    if (!Number.isInteger(adjustmentAmount) || adjustmentAmount <= 0) {
+      addToast({
+        type: "error",
+        title: "Invalid adjustment",
+        description: "Use a whole number greater than zero for bulk inventory updates.",
+      });
+      return;
+    }
+
+    const eligibleProducts = products.filter(
+      (product) => selectedIds.includes(product.id) && product.track_inventory && (product.variants?.length ?? 0) === 0
+    );
+
+    if (eligibleProducts.length === 0) {
+      addToast({
+        type: "info",
+        title: "No eligible listings",
+        description: "Bulk stock adjustments currently apply only to tracked products without variants.",
+      });
+      return;
+    }
+
+    setIsBulkInventoryUpdating(true);
+    const supabase = getSupabaseBrowserClient();
+    const directionValue = direction === "increase" ? adjustmentAmount : -adjustmentAmount;
+    const updates = eligibleProducts.map((product) =>
+      supabase
+        .from("products")
+        .update({ stock_quantity: Math.max(0, Number(product.stock_quantity ?? 0) + directionValue) })
+        .eq("id", product.id)
+        .eq("store_id", storeId)
+    );
+
+    const results = await Promise.all(updates);
+    const failedCount = results.filter((result) => result.error).length;
+    const skippedCount = selectedIds.length - eligibleProducts.length;
+
+    if (failedCount > 0) {
+      addToast({
+        type: "error",
+        title: "Bulk inventory update incomplete",
+        description: `${failedCount} listing${failedCount === 1 ? "" : "s"} could not be updated. Review the catalog and try again.`,
+      });
+      setIsBulkInventoryUpdating(false);
+      return;
+    }
+
+    addToast({
+      type: "success",
+      title: "Inventory adjusted",
+      description:
+        `${eligibleProducts.length} listing${eligibleProducts.length === 1 ? "" : "s"} ${direction === "increase" ? "increased" : "decreased"} by ${adjustmentAmount}.` +
+        (skippedCount > 0 ? ` ${skippedCount} variant-managed or untracked listing${skippedCount === 1 ? " was" : "s were"} skipped.` : ""),
+    });
+    setIsBulkInventoryUpdating(false);
+    setBulkInventoryAdjustment("0");
     await fetchProducts();
   }
 
@@ -388,6 +460,35 @@ export default function VendorProductsPage() {
             <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">{selectionSummary}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 border-r border-stone-200 pr-3 dark:border-stone-700">
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={bulkInventoryAdjustment}
+                onChange={(event) => setBulkInventoryAdjustment(event.target.value)}
+                className="h-8 w-20 border-b border-stone-200 bg-transparent text-right text-sm text-stone-900 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-white"
+                aria-label="Bulk inventory adjustment amount"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                isLoading={isBulkInventoryUpdating}
+                onClick={() => void applyBulkInventoryAdjustment("increase")}
+              >
+                Add stock
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                isLoading={isBulkInventoryUpdating}
+                onClick={() => void applyBulkInventoryAdjustment("decrease")}
+              >
+                Reduce stock
+              </Button>
+            </div>
             {bulkStatuses.map((item) => (
               <Button
                 key={item.value}
