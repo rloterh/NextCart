@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Lock, CreditCard } from "lucide-react";
@@ -67,10 +67,13 @@ export default function CheckoutPage() {
     setLoading(false);
   }
 
-  if (items.length === 0) {
-    router.push("/cart");
-    return null;
-  }
+  useEffect(() => {
+    if (items.length === 0) {
+      router.replace("/cart");
+    }
+  }, [items.length, router]);
+
+  if (items.length === 0) return null;
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">

@@ -1,15 +1,29 @@
 import Stripe from "stripe";
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-12-18.acacia",
-  typescript: true,
-});
+let stripeClient: Stripe | null = null;
 
 const PLATFORM_FEE_PERCENT = Number(process.env.STRIPE_PLATFORM_FEE_PERCENT ?? 10);
+
+export function getStripeServerClient() {
+  if (stripeClient) return stripeClient;
+
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error("Missing STRIPE_SECRET_KEY");
+  }
+
+  stripeClient = new Stripe(secretKey, {
+    apiVersion: "2024-12-18.acacia",
+    typescript: true,
+  });
+
+  return stripeClient;
+}
 
 export async function createConnectOnboardingLink(
   storeId: string, storeName: string, email: string, existingAccountId?: string | null
 ): Promise<{ accountId: string; url: string }> {
+  const stripe = getStripeServerClient();
   let accountId = existingAccountId;
   if (!accountId) {
     const account = await stripe.accounts.create({
@@ -33,6 +47,7 @@ export async function createCheckoutPaymentIntent(params: {
   amount: number; currency: string; vendorStripeAccountId: string;
   orderId: string; buyerEmail: string;
 }): Promise<{ clientSecret: string; paymentIntentId: string }> {
+  const stripe = getStripeServerClient();
   const platformFee = Math.round(params.amount * (PLATFORM_FEE_PERCENT / 100));
   const paymentIntent = await stripe.paymentIntents.create({
     amount: params.amount,
@@ -51,6 +66,7 @@ export function calculatePlatformFee(amount: number): number {
 }
 
 export async function createDashboardLink(accountId: string): Promise<string> {
+  const stripe = getStripeServerClient();
   const link = await stripe.accounts.createLoginLink(accountId);
   return link.url;
 }

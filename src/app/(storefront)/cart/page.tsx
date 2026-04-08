@@ -19,7 +19,7 @@ export default function CartPage() {
       <div className="mx-auto max-w-7xl px-6 py-20 text-center">
         <ShoppingBag className="mx-auto mb-4 h-16 w-16 text-stone-200 dark:text-stone-700" />
         <h1 className="font-serif text-3xl text-stone-900 dark:text-white">Your cart is empty</h1>
-        <p className="mt-2 text-sm text-stone-500">Discover something you'll love.</p>
+        <p className="mt-2 text-sm text-stone-500">Discover something you&apos;ll love.</p>
         <Link href="/shop"><Button className="mt-6" rightIcon={<ArrowRight className="h-4 w-4" />}>Continue shopping</Button></Link>
       </div>
     );

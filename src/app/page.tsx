@@ -21,8 +21,9 @@ const features = [
   { icon: Headphones, title: "24/7 support", desc: "Always here to help" },
 ];
 
+const smoothEase = [0.25, 0.46, 0.45, 0.94] as const;
 const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.2 } } };
-const item = { hidden: { opacity: 0, y: 24 }, show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] } } };
+const item = { hidden: { opacity: 0, y: 24 }, show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: smoothEase } } };
 
 export default function HomePage() {
   return (
@@ -35,7 +36,7 @@ export default function HomePage() {
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
+            transition={{ duration: 0.8, ease: smoothEase }}
           >
             <p className="mb-4 text-xs font-medium uppercase tracking-[0.3em] text-amber-700 dark:text-amber-500">
               The curated marketplace
