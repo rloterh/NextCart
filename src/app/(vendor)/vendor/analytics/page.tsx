@@ -3,17 +3,19 @@
 import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
-import { DollarSign, Eye, Package, ShoppingCart } from "lucide-react";
+import { AlertTriangle, DollarSign, Eye, Package, ShieldCheck, Timer, Undo2 } from "lucide-react";
 import { Card, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
+import { getExceptionRate, getAverageFulfillmentDays, getMonthlyNetRevenueSeries, getReturnRate, getSettlementRate } from "@/lib/orders/operations-metrics";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatPrice } from "@/lib/utils/constants";
 import type { Product, ProductStatus } from "@/types";
+import type { Order } from "@/types/orders";
 
 const COLORS = ["#b45309", "#92400e", "#78350f", "#a16207", "#ca8a04"];
 
 type ProductAnalyticsRow = Pick<Product, "id" | "name" | "price" | "status" | "view_count" | "sale_count">;
-type RevenueChartPoint = { month: string; revenue: number };
+type AnalyticsOrder = Pick<Order, "status" | "total" | "platform_fee" | "created_at" | "delivered_at" | "stripe_transfer_status" | "stripe_transfer_id">;
 
 interface TooltipPayloadItem {
   value: number;
@@ -25,7 +27,7 @@ interface CustomTooltipProps {
   label?: string;
 }
 
-function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
+function RevenueTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!active || !payload?.length) {
     return null;
   }
@@ -45,9 +47,20 @@ function isActiveProduct(status: ProductStatus) {
 export default function VendorAnalyticsPage() {
   const { store } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ products: 0, active: 0, views: 0, sales: 0, revenue: 0 });
+  const [stats, setStats] = useState({
+    products: 0,
+    active: 0,
+    views: 0,
+    sales: 0,
+    revenue: 0,
+    netRevenue: 0,
+    exceptionRate: 0,
+    returnRate: 0,
+    settlementRate: 0,
+    fulfillmentDays: 0,
+  });
   const [topProducts, setTopProducts] = useState<ProductAnalyticsRow[]>([]);
-  const [chartData, setChartData] = useState<RevenueChartPoint[]>([]);
+  const [chartData, setChartData] = useState<Array<{ month: string; revenue: number; net: number }>>([]);
 
   const fetchData = useCallback(async () => {
     if (!store) {
@@ -56,30 +69,38 @@ export default function VendorAnalyticsPage() {
     }
 
     const supabase = getSupabaseBrowserClient();
-    const { data: products } = await supabase
-      .from("products")
-      .select("id, name, price, status, view_count, sale_count")
-      .eq("store_id", store.id);
+    const [{ data: products }, { data: orders }] = await Promise.all([
+      supabase.from("products").select("id, name, price, status, view_count, sale_count").eq("store_id", store.id),
+      supabase
+        .from("orders")
+        .select("status, total, platform_fee, created_at, delivered_at, stripe_transfer_status, stripe_transfer_id")
+        .eq("store_id", store.id),
+    ]);
 
     const allProducts = (products ?? []) as ProductAnalyticsRow[];
+    const allOrders = (orders ?? []) as AnalyticsOrder[];
     const activeProducts = allProducts.filter((product) => isActiveProduct(product.status));
     const totalViews = allProducts.reduce((sum, product) => sum + (product.view_count ?? 0), 0);
     const totalSales = allProducts.reduce((sum, product) => sum + (product.sale_count ?? 0), 0);
-    const revenue = allProducts.reduce((sum, product) => sum + (product.sale_count ?? 0) * Number(product.price), 0);
+    const revenue = allOrders.reduce((sum, order) => sum + Number(order.total), 0);
+    const netRevenue = allOrders.reduce((sum, order) => sum + Number(order.total) - Number(order.platform_fee), 0);
 
-    setStats({ products: allProducts.length, active: activeProducts.length, views: totalViews, sales: totalSales, revenue });
+    setStats({
+      products: allProducts.length,
+      active: activeProducts.length,
+      views: totalViews,
+      sales: totalSales,
+      revenue,
+      netRevenue,
+      exceptionRate: getExceptionRate(allOrders),
+      returnRate: getReturnRate(allOrders),
+      settlementRate: getSettlementRate(allOrders),
+      fulfillmentDays: getAverageFulfillmentDays(allOrders),
+    });
 
     const sortedProducts = [...allProducts].sort((left, right) => (right.sale_count ?? 0) - (left.sale_count ?? 0)).slice(0, 5);
     setTopProducts(sortedProducts);
-
-    const months = ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
-    setChartData(
-      months.map((month) => ({
-        month,
-        revenue: Math.round(revenue * (0.1 + Math.random() * 0.3)),
-      }))
-    );
-
+    setChartData(getMonthlyNetRevenueSeries(allOrders));
     setLoading(false);
   }, [store]);
 
@@ -97,20 +118,66 @@ export default function VendorAnalyticsPage() {
     );
   }
 
+  const healthCards = [
+    {
+      label: "Net revenue",
+      value: formatPrice(stats.netRevenue),
+      detail: `${formatPrice(stats.revenue)} gross marketplace sales`,
+      icon: DollarSign,
+      color: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400",
+    },
+    {
+      label: "Total views",
+      value: stats.views.toLocaleString(),
+      detail: `${stats.sales.toLocaleString()} attributed sales`,
+      icon: Eye,
+      color: "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400",
+    },
+    {
+      label: "Catalog health",
+      value: `${stats.active}/${stats.products}`,
+      detail: "active vs total products",
+      icon: Package,
+      color: "bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400",
+    },
+    {
+      label: "Exception rate",
+      value: `${stats.exceptionRate}%`,
+      detail: "delivery and return exceptions",
+      icon: AlertTriangle,
+      color: "bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400",
+    },
+    {
+      label: "Settlement rate",
+      value: `${stats.settlementRate}%`,
+      detail: "delivered orders with payout reconciliation",
+      icon: ShieldCheck,
+      color: "bg-teal-50 text-teal-600 dark:bg-teal-900/20 dark:text-teal-400",
+    },
+    {
+      label: "Avg. fulfillment",
+      value: stats.fulfillmentDays > 0 ? `${stats.fulfillmentDays}d` : "N/A",
+      detail: `${stats.returnRate}% return rate`,
+      icon: Timer,
+      color: "bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400",
+    },
+  ];
+
+  const healthBars = [
+    { label: "Exception rate", value: stats.exceptionRate },
+    { label: "Return rate", value: stats.returnRate },
+    { label: "Settlement rate", value: stats.settlementRate },
+  ];
+
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       <div>
         <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Analytics</h1>
-        <p className="mt-1 text-sm text-stone-500">Track your store performance.</p>
+        <p className="mt-1 text-sm text-stone-500">Track sales performance, fulfillment health, and settlement quality from one vendor view.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          { label: "Revenue", value: formatPrice(stats.revenue), icon: DollarSign, color: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400" },
-          { label: "Total Views", value: stats.views.toLocaleString(), icon: Eye, color: "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400" },
-          { label: "Products", value: `${stats.active}/${stats.products}`, icon: Package, color: "bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400" },
-          { label: "Sales", value: stats.sales.toLocaleString(), icon: ShoppingCart, color: "bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400" },
-        ].map((stat) => (
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {healthCards.map((stat) => (
           <div key={stat.label} className="border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium uppercase tracking-widest text-stone-400">{stat.label}</p>
@@ -119,18 +186,19 @@ export default function VendorAnalyticsPage() {
               </div>
             </div>
             <p className="mt-3 text-2xl font-medium text-stone-900 dark:text-white">{stat.value}</p>
+            <p className="mt-1 text-xs text-stone-500">{stat.detail}</p>
           </div>
         ))}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-7">
         <Card className="lg:col-span-4">
-          <CardTitle>Revenue trend</CardTitle>
+          <CardTitle>Net revenue trend</CardTitle>
           <div className="mt-4">
             <ResponsiveContainer width="100%" height={260}>
               <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="netRevenueGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#b45309" stopOpacity={0.2} />
                     <stop offset="100%" stopColor="#b45309" stopOpacity={0} />
                   </linearGradient>
@@ -138,14 +206,35 @@ export default function VendorAnalyticsPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#a8a29e" }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#a8a29e" }} tickFormatter={(value: number) => `$${Math.round(value / 1000)}k`} />
-                <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="revenue" stroke="#b45309" strokeWidth={2} fill="url(#revGrad)" animationDuration={1000} />
+                <Tooltip content={<RevenueTooltip />} />
+                <Area type="monotone" dataKey="net" stroke="#b45309" strokeWidth={2} fill="url(#netRevenueGradient)" animationDuration={700} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </Card>
 
         <Card className="lg:col-span-3">
+          <CardTitle>Operational health</CardTitle>
+          <div className="mt-4">
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={healthBars} layout="vertical" margin={{ left: 0, right: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" horizontal={false} />
+                <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#a8a29e" }} domain={[0, 100]} />
+                <YAxis type="category" dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#78716c" }} width={110} />
+                <Tooltip formatter={(value: number) => `${value}%`} />
+                <Bar dataKey="value" radius={[0, 3, 3, 0]} animationDuration={700}>
+                  {healthBars.map((item, index) => (
+                    <Cell key={item.label} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-7">
+        <Card className="lg:col-span-4">
           <CardTitle>Top products</CardTitle>
           <div className="mt-4">
             {topProducts.length > 0 ? (
@@ -153,9 +242,9 @@ export default function VendorAnalyticsPage() {
                 <BarChart data={topProducts.map((product) => ({ name: product.name.slice(0, 20), sales: product.sale_count ?? 0 }))} layout="vertical" margin={{ left: 0, right: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" horizontal={false} />
                   <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#a8a29e" }} />
-                  <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#78716c" }} width={100} />
+                  <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#78716c" }} width={110} />
                   <Tooltip />
-                  <Bar dataKey="sales" radius={[0, 3, 3, 0]} animationDuration={800}>
+                  <Bar dataKey="sales" radius={[0, 3, 3, 0]} animationDuration={700}>
                     {topProducts.map((product, index) => (
                       <Cell key={product.id} fill={COLORS[index % COLORS.length]} />
                     ))}
@@ -165,6 +254,33 @@ export default function VendorAnalyticsPage() {
             ) : (
               <p className="py-12 text-center text-sm text-stone-400">No sales data yet</p>
             )}
+          </div>
+        </Card>
+
+        <Card className="lg:col-span-3">
+          <CardTitle>Health playbook</CardTitle>
+          <div className="mt-4 space-y-4 text-sm text-stone-500">
+            <div className="border border-stone-200 p-4 dark:border-stone-800">
+              <div className="flex items-center gap-2 text-stone-900 dark:text-white">
+                <AlertTriangle className="h-4 w-4 text-rose-500" />
+                <p className="font-medium">Exception watch</p>
+              </div>
+              <p className="mt-2">Keep delivery failures and returns under review. A double-digit exception rate usually signals a fulfillment or quality issue worth correcting.</p>
+            </div>
+            <div className="border border-stone-200 p-4 dark:border-stone-800">
+              <div className="flex items-center gap-2 text-stone-900 dark:text-white">
+                <ShieldCheck className="h-4 w-4 text-teal-500" />
+                <p className="font-medium">Settlement confidence</p>
+              </div>
+              <p className="mt-2">Use settlement rate to confirm whether delivered orders are also reconciling cleanly through Stripe transfers.</p>
+            </div>
+            <div className="border border-stone-200 p-4 dark:border-stone-800">
+              <div className="flex items-center gap-2 text-stone-900 dark:text-white">
+                <Undo2 className="h-4 w-4 text-amber-500" />
+                <p className="font-medium">Returns discipline</p>
+              </div>
+              <p className="mt-2">When return rate climbs, review product detail clarity, sizing/expectation copy, and packaging quality to reduce preventable reversals.</p>
+            </div>
           </div>
         </Card>
       </div>
