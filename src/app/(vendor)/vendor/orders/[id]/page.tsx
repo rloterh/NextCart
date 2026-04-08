@@ -28,6 +28,8 @@ type OrderUpdatePayload = {
   status: Order["status"];
   tracking_number?: string | null;
   tracking_url?: string | null;
+  packed_at?: string | null;
+  out_for_delivery_at?: string | null;
   shipped_at?: string;
   delivered_at?: string;
   cancelled_at?: string;
@@ -104,6 +106,14 @@ export default function VendorOrderDetailPage() {
       updates.shipped_at = new Date().toISOString();
       updates.tracking_number = normalizedTracking;
       updates.tracking_url = normalizedTrackingUrl || null;
+    }
+
+    if (status === "packed") {
+      updates.packed_at = new Date().toISOString();
+    }
+
+    if (status === "out_for_delivery") {
+      updates.out_for_delivery_at = new Date().toISOString();
     }
 
     if (status === "delivered") {
@@ -183,16 +193,21 @@ export default function VendorOrderDetailPage() {
 
   const address = order.shipping_address as CheckoutShippingAddress | null;
   const canProcess = order.status === "confirmed";
-  const canShip = order.status === "processing";
-  const canDeliver = order.status === "shipped";
+  const canPack = order.status === "processing";
+  const canShip = order.status === "packed";
+  const canMarkOutForDelivery = order.status === "shipped";
+  const canDeliver = order.status === "out_for_delivery";
   const storeProfile = order.store ? getStoreProfileContent(order.store) : null;
   const statusContent = orderStatusCopy[order.status];
   const timeline = [
-    { label: "Order placed", timestamp: order.created_at, description: "The buyer completed checkout and the order entered your queue." },
-    { label: "Confirmed", timestamp: order.status !== "pending" ? order.updated_at : null, description: "Payment and order details were confirmed for vendor handling." },
-    { label: "Shipped", timestamp: order.shipped_at, description: "Tracking and shipment details have been recorded." },
-    { label: "Delivered", timestamp: order.delivered_at, description: "The order was marked as delivered." },
-    { label: "Cancelled", timestamp: order.cancelled_at, description: "The order was cancelled before completion." },
+    { label: "Order placed", timestamp: order.created_at, reached: true, description: "The buyer completed checkout and the order entered your queue." },
+    { label: "Confirmed", timestamp: null, reached: order.status !== "pending", description: "Payment and order details were confirmed for vendor handling." },
+    { label: "Processing", timestamp: null, reached: ["processing", "packed", "shipped", "out_for_delivery", "delivered"].includes(order.status), description: "The order is actively being prepared by the vendor team." },
+    { label: "Packed", timestamp: order.packed_at ?? null, reached: ["packed", "shipped", "out_for_delivery", "delivered"].includes(order.status), description: "Packing is complete and the shipment is ready for carrier handoff." },
+    { label: "Shipped", timestamp: order.shipped_at, reached: ["shipped", "out_for_delivery", "delivered"].includes(order.status), description: "Tracking and shipment details have been recorded." },
+    { label: "Out for delivery", timestamp: order.out_for_delivery_at ?? null, reached: ["out_for_delivery", "delivered"].includes(order.status), description: "The carrier is on the final route to the buyer." },
+    { label: "Delivered", timestamp: order.delivered_at, reached: order.status === "delivered", description: "The order was marked as delivered." },
+    { label: "Cancelled", timestamp: order.cancelled_at, reached: Boolean(order.cancelled_at), description: "The order was cancelled before completion." },
   ].filter((entry) => entry.label !== "Cancelled" || order.cancelled_at);
 
   return (
@@ -217,9 +232,19 @@ export default function VendorOrderDetailPage() {
               Start processing
             </Button>
           ) : null}
+          {canPack ? (
+            <Button onClick={() => updateStatus("packed")} isLoading={updating} variant="outline" leftIcon={<Package className="h-4 w-4" />}>
+              Mark packed
+            </Button>
+          ) : null}
           {canShip ? (
             <Button onClick={() => updateStatus("shipped")} isLoading={updating} leftIcon={<Truck className="h-4 w-4" />}>
               Mark shipped
+            </Button>
+          ) : null}
+          {canMarkOutForDelivery ? (
+            <Button onClick={() => updateStatus("out_for_delivery")} isLoading={updating} variant="outline" leftIcon={<Truck className="h-4 w-4" />}>
+              Out for delivery
             </Button>
           ) : null}
           {canDeliver ? (
@@ -241,10 +266,10 @@ export default function VendorOrderDetailPage() {
         <div className="mt-4 space-y-4">
           {timeline.map((entry) => (
             <div key={entry.label} className="flex gap-3">
-              <div className={`mt-1 h-2.5 w-2.5 rounded-full ${entry.timestamp ? "bg-stone-900 dark:bg-white" : "bg-stone-200 dark:bg-stone-700"}`} />
+              <div className={`mt-1 h-2.5 w-2.5 rounded-full ${entry.reached ? "bg-stone-900 dark:bg-white" : "bg-stone-200 dark:bg-stone-700"}`} />
               <div>
                 <p className="text-sm font-medium text-stone-900 dark:text-white">{entry.label}</p>
-                <p className="mt-1 text-xs text-stone-400">{entry.timestamp ? formatDate(entry.timestamp) : "Waiting on this milestone"}</p>
+                <p className="mt-1 text-xs text-stone-400">{entry.timestamp ? formatDate(entry.timestamp) : entry.reached ? "Completed in workflow" : "Waiting on this milestone"}</p>
                 <p className="mt-1 text-sm text-stone-500">{entry.description}</p>
               </div>
             </div>
@@ -291,7 +316,7 @@ export default function VendorOrderDetailPage() {
       </Card>
 
       <div className="grid gap-6 md:grid-cols-2">
-        {canShip || order.status === "shipped" ? (
+        {canShip || canMarkOutForDelivery || order.status === "shipped" || order.status === "out_for_delivery" || order.status === "delivered" ? (
           <Card>
             <CardTitle>Tracking information</CardTitle>
             <div className="mt-4">
@@ -311,7 +336,7 @@ export default function VendorOrderDetailPage() {
           </div>
           <div className="mt-3 space-y-3 text-sm text-stone-600 dark:text-stone-400">
             <p>{storeProfile?.shippingNote || "Use status and tracking updates to keep the buyer informed from confirmation through shipment."}</p>
-            <p>{storeProfile?.processingTime || "If fulfillment timing changes, align your shipment updates with the actual processing timeline."}</p>
+            <p>{storeProfile?.processingTime || "If fulfillment timing changes, align your packed, shipped, and delivery updates with the actual timeline."}</p>
             {storeProfile?.supportEmail ? <p className="text-stone-900 dark:text-white">Store support: {storeProfile.supportEmail}</p> : null}
           </div>
         </Card>

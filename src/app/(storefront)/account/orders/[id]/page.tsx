@@ -13,9 +13,10 @@ import { formatDate, formatPrice } from "@/lib/utils/constants";
 import { orderStatusCopy } from "@/lib/orders/status-copy";
 import { getStoreProfileContent } from "@/lib/storefront/store-profile";
 import type { Store } from "@/types";
+import { ORDER_STATUS_CONFIG } from "@/types/orders";
 import type { CheckoutShippingAddress, Order, OrderItem } from "@/types/orders";
 
-const statusSteps = ["pending", "confirmed", "processing", "shipped", "delivered"] as const;
+const statusSteps = ["pending", "confirmed", "processing", "packed", "shipped", "out_for_delivery", "delivered"] as const;
 
 type BuyerOrderDetail = Order & {
   store: Pick<Store, "name" | "slug" | "settings"> | null;
@@ -95,6 +96,15 @@ export default function BuyerOrderDetailPage() {
   const address = order.shipping_address as CheckoutShippingAddress | null;
   const storeProfile = order.store ? getStoreProfileContent(order.store) : null;
   const statusContent = orderStatusCopy[order.status];
+  const timeline = [
+    { key: "pending", label: "Order placed", reached: true, timestamp: order.created_at, description: "Checkout completed and payment entered the marketplace workflow." },
+    { key: "confirmed", label: "Confirmed", reached: order.status !== "pending", timestamp: null, description: "Payment and order details were confirmed for vendor handling." },
+    { key: "processing", label: "Processing", reached: ["processing", "packed", "shipped", "out_for_delivery", "delivered"].includes(order.status), timestamp: null, description: "The vendor started preparing the order." },
+    { key: "packed", label: "Packed", reached: ["packed", "shipped", "out_for_delivery", "delivered"].includes(order.status), timestamp: order.packed_at ?? null, description: "Packing is complete and the shipment is prepared for carrier handoff." },
+    { key: "shipped", label: "Shipped", reached: ["shipped", "out_for_delivery", "delivered"].includes(order.status), timestamp: order.shipped_at ?? null, description: "Tracking is active and the parcel is moving through the carrier network." },
+    { key: "out_for_delivery", label: "Out for delivery", reached: ["out_for_delivery", "delivered"].includes(order.status), timestamp: order.out_for_delivery_at ?? null, description: "The carrier is on the final route for delivery." },
+    { key: "delivered", label: "Delivered", reached: order.status === "delivered", timestamp: order.delivered_at ?? null, description: "Delivery was completed and the order is ready for follow-up or review." },
+  ];
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-3xl space-y-6 px-6 py-8">
@@ -140,7 +150,25 @@ export default function BuyerOrderDetailPage() {
           </div>
           <div className="mt-2 flex justify-between text-[10px] uppercase tracking-widest text-stone-400">
             {statusSteps.map((step) => (
-              <span key={step}>{step}</span>
+              <span key={step}>{ORDER_STATUS_CONFIG[step].label}</span>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
+      {order.status !== "cancelled" && order.status !== "refunded" ? (
+        <Card>
+          <CardTitle>Fulfillment timeline</CardTitle>
+          <div className="mt-4 space-y-4">
+            {timeline.map((entry) => (
+              <div key={entry.key} className="flex gap-3">
+                <div className={`mt-1 h-2.5 w-2.5 rounded-full ${entry.reached ? "bg-stone-900 dark:bg-white" : "bg-stone-200 dark:bg-stone-700"}`} />
+                <div>
+                  <p className="text-sm font-medium text-stone-900 dark:text-white">{entry.label}</p>
+                  <p className="mt-1 text-xs text-stone-400">{entry.timestamp ? formatDate(entry.timestamp) : entry.reached ? "Completed in workflow" : "Waiting on this milestone"}</p>
+                  <p className="mt-1 text-sm text-stone-500">{entry.description}</p>
+                </div>
+              </div>
             ))}
           </div>
         </Card>
@@ -212,7 +240,7 @@ export default function BuyerOrderDetailPage() {
           </div>
           <div className="mt-3 space-y-3 text-sm text-stone-600 dark:text-stone-400">
             <p>{storeProfile?.shippingNote || "Shipping, packaging, and support context will continue to appear here as the vendor updates the order."}</p>
-            <p>{storeProfile?.processingTime || "You can revisit this page any time to confirm whether the order has moved from confirmation into shipment."}</p>
+            <p>{storeProfile?.processingTime || "You can revisit this page any time to confirm whether the order has moved from packing into final delivery."}</p>
             {storeProfile?.supportEmail ? <p className="text-stone-900 dark:text-white">Support: {storeProfile.supportEmail}</p> : null}
           </div>
         </Card>

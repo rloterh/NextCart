@@ -22,10 +22,20 @@ export const orderStatusCopy: Record<OrderStatus, OrderStatusContent> = {
     buyerMessage: "The vendor is packing your order and preparing shipment details.",
     vendorMessage: "The order is actively being prepared. Add tracking as soon as the shipment is booked.",
   },
+  packed: {
+    label: "Packed",
+    buyerMessage: "Your order has been packed and is waiting for carrier handoff.",
+    vendorMessage: "Packing is complete. Confirm shipment booking details before marking this order as shipped.",
+  },
   shipped: {
     label: "Shipped",
     buyerMessage: "Your package is on the way. Tracking details are now available for follow-up.",
     vendorMessage: "The buyer now sees this order as shipped. Keep tracking current and mark delivered when confirmed.",
+  },
+  out_for_delivery: {
+    label: "Out for delivery",
+    buyerMessage: "Your package is on the final delivery run and should arrive soon.",
+    vendorMessage: "The shipment is on its final route. Mark delivered once handoff is confirmed.",
   },
   delivered: {
     label: "Delivered",

@@ -10,13 +10,15 @@ import { formatDate, formatPrice } from "@/lib/utils/constants";
 import type { Order, OrderItem } from "@/types/orders";
 import type { OrderStatus, Profile } from "@/types";
 
-const statuses: Array<OrderStatus | "all"> = ["all", "pending", "confirmed", "processing", "shipped", "delivered", "cancelled"];
+const statuses: Array<OrderStatus | "all"> = ["all", "pending", "confirmed", "processing", "packed", "shipped", "out_for_delivery", "delivered", "cancelled"];
 
 const statusColors: Record<OrderStatus, string> = {
   pending: "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400",
   confirmed: "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400",
   processing: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400",
+  packed: "bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300",
   shipped: "bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400",
+  out_for_delivery: "bg-cyan-50 text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-300",
   delivered: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400",
   cancelled: "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400",
   refunded: "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400",
@@ -110,7 +112,7 @@ export default function VendorOrdersPage() {
               status === value ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900" : "text-stone-500 hover:text-stone-900"
             }`}
           >
-            {value}
+            {value === "all" ? "all" : value.replaceAll("_", " ")}
           </button>
         ))}
       </div>
@@ -165,7 +167,7 @@ export default function VendorOrdersPage() {
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusColors[order.status]}`}>
                       <span className="h-1 w-1 rounded-full bg-current" />
-                      {order.status}
+                      {order.status.replaceAll("_", " ")}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm text-stone-500">{formatDate(order.created_at)}</td>

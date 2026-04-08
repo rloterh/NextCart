@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
+import { getPayoutState } from "@/lib/orders/payout-state";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatPrice, slugify } from "@/lib/utils/constants";
 import { useUIStore } from "@/stores/ui-store";
@@ -40,6 +41,8 @@ interface FinanceSnapshot {
   latestOrderDate: string | null;
 }
 
+type FinanceOrderSummary = Pick<Order, "id" | "order_number" | "status" | "total" | "platform_fee" | "created_at" | "delivered_at" | "stripe_transfer_id">;
+
 export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClientProps) {
   const { store, user, refreshProfile, isLoading: authLoading } = useAuth();
   const addToast = useUIStore((state) => state.addToast);
@@ -61,6 +64,7 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
   const [isOpeningStripeDashboard, setIsOpeningStripeDashboard] = useState(false);
   const [financeSnapshot, setFinanceSnapshot] = useState<FinanceSnapshot | null>(null);
+  const [financeOrders, setFinanceOrders] = useState<FinanceOrderSummary[]>([]);
 
   useEffect(() => {
     if (!store) return;
@@ -110,15 +114,15 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
       const supabase = getSupabaseBrowserClient();
       const { data } = await supabase
         .from("orders")
-        .select("status, total, platform_fee, created_at")
+        .select("id, order_number, status, total, platform_fee, created_at, delivered_at, stripe_transfer_id")
         .eq("store_id", store.id);
 
-      const orders = (data ?? []) as Array<Pick<Order, "status" | "total" | "platform_fee" | "created_at">>;
+      const orders = (data ?? []) as FinanceOrderSummary[];
       const grossSales = orders.reduce((sum, order) => sum + Number(order.total), 0);
       const platformFees = orders.reduce((sum, order) => sum + Number(order.platform_fee), 0);
       const estimatedPayouts = grossSales - platformFees;
-      const openOrders = orders.filter((order) => ["pending", "confirmed", "processing", "shipped"].includes(order.status)).length;
-      const settledOrders = orders.filter((order) => ["delivered"].includes(order.status)).length;
+      const openOrders = orders.filter((order) => ["pending", "confirmed", "processing", "packed", "shipped", "out_for_delivery"].includes(order.status)).length;
+      const settledOrders = orders.filter((order) => order.status === "delivered" || Boolean(order.stripe_transfer_id)).length;
       const latestOrderDate = orders.length > 0 ? orders.map((order) => order.created_at).sort().at(-1) ?? null : null;
 
       setFinanceSnapshot({
@@ -129,6 +133,11 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
         settledOrders,
         latestOrderDate,
       });
+      setFinanceOrders(
+        [...orders]
+          .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
+          .slice(0, 6)
+      );
     }
 
     void fetchFinanceSnapshot();
@@ -425,6 +434,47 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
                 <span className="text-stone-500">Latest order activity</span>
                 <span className="font-medium text-stone-900 dark:text-white">{financeSnapshot?.latestOrderDate ? new Date(financeSnapshot.latestOrderDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "No orders yet"}</span>
               </div>
+            </div>
+
+            <div className="mt-5 border-t border-stone-100 pt-5 dark:border-stone-800">
+              <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Recent payout drill-down</p>
+              {financeOrders.length === 0 ? (
+                <p className="mt-3 text-sm text-stone-500">Orders will appear here with fulfillment-driven payout states once your store starts selling.</p>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  {financeOrders.map((order) => {
+                    const payoutState = getPayoutState(order.status, order.stripe_transfer_id);
+                    return (
+                      <div key={order.id} className="border border-stone-200 p-3 text-sm dark:border-stone-800">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-medium text-stone-900 dark:text-white">{order.order_number}</p>
+                            <p className="mt-1 text-xs text-stone-500">{new Date(order.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+                          </div>
+                          <span
+                            className={`px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${
+                              payoutState.tone === "success"
+                                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300"
+                                : payoutState.tone === "warning"
+                                  ? "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
+                                  : payoutState.tone === "muted"
+                                    ? "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400"
+                                    : "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
+                            }`}
+                          >
+                            {payoutState.label}
+                          </span>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between text-xs text-stone-500">
+                          <span>Status: {order.status.replaceAll("_", " ")}</span>
+                          <span>Net: {formatPrice(Number(order.total) - Number(order.platform_fee))}</span>
+                        </div>
+                        <p className="mt-2 text-xs leading-relaxed text-stone-500">{payoutState.description}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </Card>
 
