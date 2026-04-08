@@ -1,4 +1,4 @@
-import type { Product, ProductVariant, Store, Profile, OrderStatus } from "./index";
+import type { Store, Profile, OrderStatus } from "./index";
 
 export interface Address {
   id: string;
@@ -16,6 +16,17 @@ export interface Address {
   created_at: string;
 }
 
+export interface CheckoutShippingAddress {
+  fullName: string;
+  line1: string;
+  line2: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  phone: string;
+}
+
 export interface Order {
   id: string;
   order_number: string;
@@ -30,7 +41,7 @@ export interface Order {
   currency: string;
   stripe_payment_intent_id: string | null;
   stripe_checkout_session_id: string | null;
-  shipping_address: Address;
+  shipping_address: CheckoutShippingAddress | null;
   tracking_number: string | null;
   tracking_url: string | null;
   notes: string | null;
