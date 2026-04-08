@@ -30,6 +30,8 @@ type OrderUpdatePayload = {
   tracking_url?: string | null;
   packed_at?: string | null;
   out_for_delivery_at?: string | null;
+  delivery_failed_at?: string | null;
+  return_initiated_at?: string | null;
   shipped_at?: string;
   delivered_at?: string;
   cancelled_at?: string;
@@ -116,8 +118,16 @@ export default function VendorOrderDetailPage() {
       updates.out_for_delivery_at = new Date().toISOString();
     }
 
+    if (status === "delivery_failed") {
+      updates.delivery_failed_at = new Date().toISOString();
+    }
+
     if (status === "delivered") {
       updates.delivered_at = new Date().toISOString();
+    }
+
+    if (status === "return_initiated") {
+      updates.return_initiated_at = new Date().toISOString();
     }
 
     if (status === "cancelled") {
@@ -197,6 +207,8 @@ export default function VendorOrderDetailPage() {
   const canShip = order.status === "packed";
   const canMarkOutForDelivery = order.status === "shipped";
   const canDeliver = order.status === "out_for_delivery";
+  const canMarkDeliveryFailed = order.status === "shipped" || order.status === "out_for_delivery";
+  const canInitiateReturn = order.status === "delivered";
   const storeProfile = order.store ? getStoreProfileContent(order.store) : null;
   const statusContent = orderStatusCopy[order.status];
   const timeline = [
@@ -206,9 +218,16 @@ export default function VendorOrderDetailPage() {
     { label: "Packed", timestamp: order.packed_at ?? null, reached: ["packed", "shipped", "out_for_delivery", "delivered"].includes(order.status), description: "Packing is complete and the shipment is ready for carrier handoff." },
     { label: "Shipped", timestamp: order.shipped_at, reached: ["shipped", "out_for_delivery", "delivered"].includes(order.status), description: "Tracking and shipment details have been recorded." },
     { label: "Out for delivery", timestamp: order.out_for_delivery_at ?? null, reached: ["out_for_delivery", "delivered"].includes(order.status), description: "The carrier is on the final route to the buyer." },
+    { label: "Delivery failed", timestamp: order.delivery_failed_at ?? null, reached: order.status === "delivery_failed", description: "The shipment hit a failed delivery event and needs follow-up." },
     { label: "Delivered", timestamp: order.delivered_at, reached: order.status === "delivered", description: "The order was marked as delivered." },
+    { label: "Return initiated", timestamp: order.return_initiated_at ?? null, reached: order.status === "return_initiated", description: "A return or exception flow started after delivery." },
     { label: "Cancelled", timestamp: order.cancelled_at, reached: Boolean(order.cancelled_at), description: "The order was cancelled before completion." },
-  ].filter((entry) => entry.label !== "Cancelled" || order.cancelled_at);
+  ].filter(
+    (entry) =>
+      (entry.label !== "Cancelled" || order.cancelled_at) &&
+      (entry.label !== "Delivery failed" || order.delivery_failed_at) &&
+      (entry.label !== "Return initiated" || order.return_initiated_at)
+  );
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-3xl space-y-6">
@@ -247,9 +266,19 @@ export default function VendorOrderDetailPage() {
               Out for delivery
             </Button>
           ) : null}
+          {canMarkDeliveryFailed ? (
+            <Button onClick={() => updateStatus("delivery_failed")} isLoading={updating} variant="outline">
+              Delivery failed
+            </Button>
+          ) : null}
           {canDeliver ? (
             <Button onClick={() => updateStatus("delivered")} isLoading={updating} leftIcon={<CheckCircle2 className="h-4 w-4" />}>
               Mark delivered
+            </Button>
+          ) : null}
+          {canInitiateReturn ? (
+            <Button onClick={() => updateStatus("return_initiated")} isLoading={updating} variant="outline">
+              Initiate return
             </Button>
           ) : null}
         </div>
@@ -336,7 +365,7 @@ export default function VendorOrderDetailPage() {
           </div>
           <div className="mt-3 space-y-3 text-sm text-stone-600 dark:text-stone-400">
             <p>{storeProfile?.shippingNote || "Use status and tracking updates to keep the buyer informed from confirmation through shipment."}</p>
-            <p>{storeProfile?.processingTime || "If fulfillment timing changes, align your packed, shipped, and delivery updates with the actual timeline."}</p>
+            <p>{storeProfile?.processingTime || "If fulfillment timing changes, align your packed, shipped, delivery, and exception updates with the actual timeline."}</p>
             {storeProfile?.supportEmail ? <p className="text-stone-900 dark:text-white">Store support: {storeProfile.supportEmail}</p> : null}
           </div>
         </Card>

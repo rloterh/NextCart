@@ -24,7 +24,9 @@ const statusColors: Record<OrderStatus, string> = {
   packed: "bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300",
   shipped: "bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400",
   out_for_delivery: "bg-cyan-50 text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-300",
+  delivery_failed: "bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300",
   delivered: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400",
+  return_initiated: "bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300",
   cancelled: "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400",
   refunded: "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400",
 };

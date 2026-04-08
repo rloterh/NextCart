@@ -41,7 +41,7 @@ interface FinanceSnapshot {
   latestOrderDate: string | null;
 }
 
-type FinanceOrderSummary = Pick<Order, "id" | "order_number" | "status" | "total" | "platform_fee" | "created_at" | "delivered_at" | "stripe_transfer_id">;
+type FinanceOrderSummary = Pick<Order, "id" | "order_number" | "status" | "total" | "platform_fee" | "created_at" | "delivered_at" | "stripe_transfer_id" | "stripe_transfer_status" | "payout_reconciled_at">;
 
 export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClientProps) {
   const { store, user, refreshProfile, isLoading: authLoading } = useAuth();
@@ -114,7 +114,7 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
       const supabase = getSupabaseBrowserClient();
       const { data } = await supabase
         .from("orders")
-        .select("id, order_number, status, total, platform_fee, created_at, delivered_at, stripe_transfer_id")
+        .select("id, order_number, status, total, platform_fee, created_at, delivered_at, stripe_transfer_id, stripe_transfer_status, payout_reconciled_at")
         .eq("store_id", store.id);
 
       const orders = (data ?? []) as FinanceOrderSummary[];
@@ -443,7 +443,7 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
               ) : (
                 <div className="mt-3 space-y-3">
                   {financeOrders.map((order) => {
-                    const payoutState = getPayoutState(order.status, order.stripe_transfer_id);
+                    const payoutState = getPayoutState(order.status, order.stripe_transfer_id, order.stripe_transfer_status);
                     return (
                       <div key={order.id} className="border border-stone-200 p-3 text-sm dark:border-stone-800">
                         <div className="flex items-start justify-between gap-3">
@@ -468,6 +468,20 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
                         <div className="mt-3 flex items-center justify-between text-xs text-stone-500">
                           <span>Status: {order.status.replaceAll("_", " ")}</span>
                           <span>Net: {formatPrice(Number(order.total) - Number(order.platform_fee))}</span>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between text-xs text-stone-500">
+                          <span>Transfer state</span>
+                          <span className="font-medium text-stone-900 dark:text-white">
+                            {order.stripe_transfer_status ? order.stripe_transfer_status.replaceAll("_", " ") : "Awaiting Stripe update"}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between text-xs text-stone-500">
+                          <span>Reconciled</span>
+                          <span className="font-medium text-stone-900 dark:text-white">
+                            {order.payout_reconciled_at
+                              ? new Date(order.payout_reconciled_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                              : "Not yet"}
+                          </span>
                         </div>
                         <p className="mt-2 text-xs leading-relaxed text-stone-500">{payoutState.description}</p>
                       </div>

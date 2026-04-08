@@ -99,11 +99,13 @@ export default function BuyerOrderDetailPage() {
   const timeline = [
     { key: "pending", label: "Order placed", reached: true, timestamp: order.created_at, description: "Checkout completed and payment entered the marketplace workflow." },
     { key: "confirmed", label: "Confirmed", reached: order.status !== "pending", timestamp: null, description: "Payment and order details were confirmed for vendor handling." },
-    { key: "processing", label: "Processing", reached: ["processing", "packed", "shipped", "out_for_delivery", "delivered"].includes(order.status), timestamp: null, description: "The vendor started preparing the order." },
-    { key: "packed", label: "Packed", reached: ["packed", "shipped", "out_for_delivery", "delivered"].includes(order.status), timestamp: order.packed_at ?? null, description: "Packing is complete and the shipment is prepared for carrier handoff." },
-    { key: "shipped", label: "Shipped", reached: ["shipped", "out_for_delivery", "delivered"].includes(order.status), timestamp: order.shipped_at ?? null, description: "Tracking is active and the parcel is moving through the carrier network." },
-    { key: "out_for_delivery", label: "Out for delivery", reached: ["out_for_delivery", "delivered"].includes(order.status), timestamp: order.out_for_delivery_at ?? null, description: "The carrier is on the final route for delivery." },
-    { key: "delivered", label: "Delivered", reached: order.status === "delivered", timestamp: order.delivered_at ?? null, description: "Delivery was completed and the order is ready for follow-up or review." },
+    { key: "processing", label: "Processing", reached: ["processing", "packed", "shipped", "out_for_delivery", "delivered", "delivery_failed", "return_initiated"].includes(order.status), timestamp: null, description: "The vendor started preparing the order." },
+    { key: "packed", label: "Packed", reached: ["packed", "shipped", "out_for_delivery", "delivered", "delivery_failed", "return_initiated"].includes(order.status), timestamp: order.packed_at ?? null, description: "Packing is complete and the shipment is prepared for carrier handoff." },
+    { key: "shipped", label: "Shipped", reached: ["shipped", "out_for_delivery", "delivered", "delivery_failed", "return_initiated"].includes(order.status), timestamp: order.shipped_at ?? null, description: "Tracking is active and the parcel is moving through the carrier network." },
+    { key: "out_for_delivery", label: "Out for delivery", reached: ["out_for_delivery", "delivered", "delivery_failed", "return_initiated"].includes(order.status), timestamp: order.out_for_delivery_at ?? null, description: "The carrier is on the final route for delivery." },
+    { key: "delivery_failed", label: "Delivery issue", reached: order.status === "delivery_failed", timestamp: order.delivery_failed_at ?? null, description: "The shipment hit a failed delivery event and the vendor is reviewing the next step." },
+    { key: "delivered", label: "Delivered", reached: order.status === "delivered" || order.status === "return_initiated", timestamp: order.delivered_at ?? null, description: "Delivery was completed and the order is ready for follow-up or review." },
+    { key: "return_initiated", label: "Return initiated", reached: order.status === "return_initiated", timestamp: order.return_initiated_at ?? null, description: "A return or post-delivery exception was started on this order." },
   ];
 
   return (
@@ -245,6 +247,17 @@ export default function BuyerOrderDetailPage() {
           </div>
         </Card>
       </div>
+
+      {order.status === "delivery_failed" || order.status === "return_initiated" ? (
+        <Card>
+          <CardTitle>Exception guidance</CardTitle>
+          <p className="mt-3 text-sm leading-relaxed text-stone-500">
+            {order.status === "delivery_failed"
+              ? "The vendor is reviewing the failed delivery event and should update this page once the new delivery plan is confirmed."
+              : "A return or post-delivery exception is underway. Keep this order page and your support messages aligned while the next step is confirmed."}
+          </p>
+        </Card>
+      ) : null}
 
       {order.tracking_number ? (
         <Card>
