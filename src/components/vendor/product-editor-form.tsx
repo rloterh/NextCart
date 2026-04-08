@@ -5,16 +5,17 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, ImagePlus, Package, Upload, X } from "lucide-react";
+import { ArrowLeft, Boxes, ImagePlus, Package, Plus, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { uploadProductImage } from "@/lib/supabase/storage";
+import { getInventorySummary, textToVariantOptions, toEditableVariant, type EditableVariant } from "@/lib/vendor/catalog";
 import { formatPrice, slugify } from "@/lib/utils/constants";
 import { useUIStore } from "@/stores/ui-store";
-import type { Category, Product, ProductStatus } from "@/types";
+import type { Category, Product, ProductStatus, ProductVariant } from "@/types";
 
 interface ProductFormState {
   name: string;
@@ -73,6 +74,10 @@ interface ProductEditorFormProps {
   product?: Product | null;
 }
 
+function emptyVariant(): EditableVariant {
+  return toEditableVariant();
+}
+
 export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
   const router = useRouter();
   const { store, isLoading: authLoading } = useAuth();
@@ -82,21 +87,18 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [images, setImages] = useState<string[]>(product?.images ?? []);
   const [form, setForm] = useState<ProductFormState>(() => toFormState(product));
+  const [variants, setVariants] = useState<EditableVariant[]>(() => (product?.variants ?? []).map((variant) => toEditableVariant(variant)));
 
   useEffect(() => {
     setForm(toFormState(product));
     setImages(product?.images ?? []);
+    setVariants((product?.variants ?? []).map((variant) => toEditableVariant(variant)));
   }, [product]);
 
   useEffect(() => {
     async function fetchCategories() {
       const supabase = getSupabaseBrowserClient();
-      const { data } = await supabase
-        .from("categories")
-        .select("*")
-        .eq("is_active", true)
-        .order("sort_order");
-
+      const { data } = await supabase.from("categories").select("*").eq("is_active", true).order("sort_order");
       setCategories((data ?? []) as Category[]);
     }
 
@@ -106,13 +108,18 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
   const pricePreview = useMemo(() => {
     const price = Number(form.price || 0);
     const compareAt = Number(form.compareAtPrice || 0);
-
-    return {
-      price,
-      compareAt,
-      hasDiscount: compareAt > price && price > 0,
-    };
+    return { price, compareAt, hasDiscount: compareAt > price && price > 0 };
   }, [form.compareAtPrice, form.price]);
+
+  const normalizedVariantsPreview = useMemo(
+    () => variants.filter((variant) => variant.name.trim()).map((variant) => ({ stock_quantity: Number(variant.stockQuantity || 0) })) as ProductVariant[],
+    [variants]
+  );
+
+  const inventorySummary = useMemo(
+    () => getInventorySummary({ track_inventory: form.trackInventory, stock_quantity: Number(form.stockQuantity || 0), variants: normalizedVariantsPreview }),
+    [form.stockQuantity, form.trackInventory, normalizedVariantsPreview]
+  );
 
   async function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
@@ -125,17 +132,9 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
         setImages((current) => [...current, result.url]);
       }
 
-      addToast({
-        type: "success",
-        title: "Images uploaded",
-        description: "Your product gallery is ready to review.",
-      });
+      addToast({ type: "success", title: "Images uploaded", description: "Your product gallery is ready to review." });
     } catch (error) {
-      addToast({
-        type: "error",
-        title: "Upload failed",
-        description: error instanceof Error ? error.message : "Please try again.",
-      });
+      addToast({ type: "error", title: "Upload failed", description: error instanceof Error ? error.message : "Please try again." });
     } finally {
       setIsUploading(false);
       event.target.value = "";
@@ -146,6 +145,18 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function updateVariant(index: number, field: keyof EditableVariant, value: string) {
+    setVariants((current) => current.map((variant, variantIndex) => (variantIndex === index ? { ...variant, [field]: value } : variant)));
+  }
+
+  function addVariant() {
+    setVariants((current) => [...current, emptyVariant()]);
+  }
+
+  function removeVariant(index: number) {
+    setVariants((current) => current.filter((_, variantIndex) => variantIndex !== index));
+  }
+
   function removeImage(index: number) {
     setImages((current) => current.filter((_, currentIndex) => currentIndex !== index));
   }
@@ -154,20 +165,12 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
     event.preventDefault();
 
     if (!store) {
-      addToast({
-        type: "error",
-        title: "Store not available",
-        description: "Finish loading your vendor profile before editing products.",
-      });
+      addToast({ type: "error", title: "Store not available", description: "Finish loading your vendor profile before editing products." });
       return;
     }
 
-    if (!form.name || !form.price) {
-      addToast({
-        type: "error",
-        title: "Missing fields",
-        description: "Name and price are required before you can save this product.",
-      });
+    if (!form.name.trim() || !form.price) {
+      addToast({ type: "error", title: "Missing fields", description: "Name and price are required before you can save this product." });
       return;
     }
 
@@ -179,6 +182,43 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
       });
       return;
     }
+
+    const namedVariants = variants.filter((variant) => variant.name.trim());
+    const seenNames = new Set<string>();
+
+    for (const variant of namedVariants) {
+      const normalizedName = variant.name.trim().toLowerCase();
+
+      if (seenNames.has(normalizedName)) {
+        addToast({
+          type: "error",
+          title: "Variant names must be unique",
+          description: "Rename duplicate variants so vendors and buyers can distinguish each option clearly.",
+        });
+        return;
+      }
+
+      seenNames.add(normalizedName);
+
+      if (Number.isNaN(Number(variant.priceAdjustment || 0)) || Number.isNaN(Number(variant.stockQuantity || 0))) {
+        addToast({
+          type: "error",
+          title: "Variant values are invalid",
+          description: "Check price adjustments and stock quantities before saving.",
+        });
+        return;
+      }
+    }
+
+    const normalizedVariants = namedVariants.map((variant, index) => ({
+      id: variant.id,
+      name: variant.name.trim(),
+      sku: variant.sku.trim() || null,
+      price_adjustment: Number(variant.priceAdjustment || 0),
+      stock_quantity: Number(variant.stockQuantity || 0),
+      options: textToVariantOptions(variant.optionsText),
+      sort_order: index,
+    }));
 
     const supabase = getSupabaseBrowserClient();
     const payload = {
@@ -196,10 +236,7 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
       track_inventory: form.trackInventory,
       category_id: form.categoryId || null,
       images,
-      tags: form.tags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean),
+      tags: form.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
       status: form.status,
     };
 
@@ -208,26 +245,69 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
     try {
       const response =
         mode === "create"
-          ? await supabase.from("products").insert(payload).select().single()
+          ? await supabase.from("products").insert(payload).select("*, variants:product_variants(*)").single()
           : await supabase
               .from("products")
               .update(payload)
               .eq("id", product?.id ?? "")
               .eq("store_id", store.id)
-              .select()
+              .select("*, variants:product_variants(*)")
               .single();
 
-      if (response.error) {
-        throw new Error(response.error.message);
+      if (response.error || !response.data) {
+        throw new Error(response.error?.message ?? "Unable to save product.");
+      }
+
+      const savedProduct = response.data as Product;
+      const savedProductId = savedProduct.id;
+      const existingVariantIds = (product?.variants ?? []).map((variant) => variant.id);
+      const retainedVariantIds = normalizedVariants.flatMap((variant) => (variant.id ? [variant.id] : []));
+      const removedVariantIds = existingVariantIds.filter((id) => !retainedVariantIds.includes(id));
+
+      if (removedVariantIds.length > 0) {
+        const { error: deleteError } = await supabase.from("product_variants").delete().eq("product_id", savedProductId).in("id", removedVariantIds);
+        if (deleteError) throw new Error(deleteError.message);
+      }
+
+      const existingVariantsPayload = normalizedVariants
+        .filter((variant): variant is typeof variant & { id: string } => Boolean(variant.id))
+        .map((variant) => ({
+          id: variant.id,
+          product_id: savedProductId,
+          name: variant.name,
+          sku: variant.sku,
+          price_adjustment: variant.price_adjustment,
+          stock_quantity: variant.stock_quantity,
+          options: variant.options,
+          sort_order: variant.sort_order,
+        }));
+
+      if (existingVariantsPayload.length > 0) {
+        const { error: updateVariantsError } = await supabase.from("product_variants").upsert(existingVariantsPayload);
+        if (updateVariantsError) throw new Error(updateVariantsError.message);
+      }
+
+      const newVariantsPayload = normalizedVariants
+        .filter((variant) => !variant.id)
+        .map((variant) => ({
+          product_id: savedProductId,
+          name: variant.name,
+          sku: variant.sku,
+          price_adjustment: variant.price_adjustment,
+          stock_quantity: variant.stock_quantity,
+          options: variant.options,
+          sort_order: variant.sort_order,
+        }));
+
+      if (newVariantsPayload.length > 0) {
+        const { error: createVariantsError } = await supabase.from("product_variants").insert(newVariantsPayload);
+        if (createVariantsError) throw new Error(createVariantsError.message);
       }
 
       addToast({
         type: "success",
         title: mode === "create" ? "Product created" : "Product updated",
-        description:
-          mode === "create"
-            ? "Your catalog now includes this listing."
-            : "Your storefront changes are live and ready for review.",
+        description: mode === "create" ? "Your catalog now includes this listing." : "Your storefront changes are live and ready for review.",
       });
 
       router.push("/vendor/products");
@@ -251,19 +331,13 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
     return (
       <div className="border border-dashed border-stone-200 bg-white p-10 text-center dark:border-stone-800 dark:bg-stone-900">
         <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Store access unavailable</h1>
-        <p className="mt-3 text-sm text-stone-500">
-          A vendor store record is required before you can manage catalog listings.
-        </p>
+        <p className="mt-3 text-sm text-stone-500">A vendor store record is required before you can manage catalog listings.</p>
       </div>
     );
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="mx-auto max-w-5xl space-y-6"
-    >
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-5xl space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link href="/vendor/products">
@@ -272,25 +346,23 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
             </button>
           </Link>
           <div>
-            <h1 className="font-serif text-2xl text-stone-900 dark:text-white">
-              {mode === "create" ? "Create product" : "Edit product"}
-            </h1>
+            <h1 className="font-serif text-2xl text-stone-900 dark:text-white">{mode === "create" ? "Create product" : "Edit product"}</h1>
             <p className="mt-1 text-sm text-stone-500">
               {mode === "create"
-                ? "Launch a polished listing with pricing, inventory, and editorial media."
+                ? "Launch a polished listing with pricing, inventory, variants, and editorial media."
                 : "Refine merchandising, inventory, and publishing details without leaving the vendor workspace."}
             </p>
           </div>
         </div>
 
-        {mode === "edit" && product && (
+        {mode === "edit" && product ? (
           <Link
             href={`/products/${product.store_id}/${product.slug}`}
             className="hidden border border-stone-200 px-4 py-2 text-xs font-medium uppercase tracking-wider text-stone-600 transition-colors hover:border-stone-300 hover:text-stone-900 dark:border-stone-700 dark:text-stone-300 dark:hover:border-stone-600 dark:hover:text-white sm:inline-flex"
           >
             Preview live page
           </Link>
-        )}
+        ) : null}
       </div>
 
       <form onSubmit={handleSubmit} className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -298,16 +370,9 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
           <Card>
             <h2 className="mb-4 text-xs font-medium uppercase tracking-widest text-stone-400">Details</h2>
             <div className="space-y-4">
-              <Input
-                label="Product name"
-                placeholder="Handcrafted leather weekender"
-                value={form.name}
-                onChange={(event) => updateField("name", event.target.value)}
-              />
+              <Input label="Product name" placeholder="Handcrafted leather weekender" value={form.name} onChange={(event) => updateField("name", event.target.value)} />
               <div>
-                <label className="block text-xs font-medium uppercase tracking-widest text-stone-500 dark:text-stone-400">
-                  Description
-                </label>
+                <label className="block text-xs font-medium uppercase tracking-widest text-stone-500 dark:text-stone-400">Description</label>
                 <textarea
                   rows={5}
                   value={form.description}
@@ -316,12 +381,7 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
                   className="mt-1.5 w-full border-b border-stone-200 bg-transparent py-2 text-sm placeholder:text-stone-400 focus:border-stone-900 focus:outline-none dark:border-stone-700"
                 />
               </div>
-              <Input
-                label="Short description"
-                placeholder="Editorial one-liner for product cards and collection modules"
-                value={form.shortDescription}
-                onChange={(event) => updateField("shortDescription", event.target.value)}
-              />
+              <Input label="Short description" placeholder="Editorial one-liner for product cards and collection modules" value={form.shortDescription} onChange={(event) => updateField("shortDescription", event.target.value)} />
             </div>
           </Card>
 
@@ -331,11 +391,7 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
               {images.map((url, index) => (
                 <div key={`${url}-${index}`} className="group relative aspect-square overflow-hidden bg-stone-100 dark:bg-stone-800">
                   <Image src={url} alt="" fill className="object-cover" sizes="(min-width: 640px) 200px, 100vw" />
-                  <button
-                    type="button"
-                    onClick={() => removeImage(index)}
-                    className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-stone-950/70 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                  >
+                  <button type="button" onClick={() => removeImage(index)} className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-stone-950/70 text-white opacity-0 transition-opacity group-hover:opacity-100">
                     <X className="h-4 w-4" />
                   </button>
                 </div>
@@ -343,9 +399,7 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
               <label className="flex aspect-square cursor-pointer flex-col items-center justify-center border border-dashed border-stone-300 text-stone-400 transition-colors hover:border-stone-500 hover:text-stone-600 dark:border-stone-700">
                 <input type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
                 {isUploading ? <Upload className="h-5 w-5 animate-pulse" /> : <ImagePlus className="h-5 w-5" />}
-                <span className="mt-2 text-[10px] uppercase tracking-wider">
-                  {isUploading ? "Uploading" : "Add media"}
-                </span>
+                <span className="mt-2 text-[10px] uppercase tracking-wider">{isUploading ? "Uploading" : "Add media"}</span>
               </label>
             </div>
           </Card>
@@ -358,15 +412,83 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
               <Input label="Cost price" type="number" step="0.01" placeholder="0.00" value={form.costPrice} onChange={(event) => updateField("costPrice", event.target.value)} hint="Used for internal margin awareness." />
               <Input label="SKU" placeholder="WEEKENDER-001" value={form.sku} onChange={(event) => updateField("sku", event.target.value)} />
               <Input label="Barcode" placeholder="UPC or EAN" value={form.barcode} onChange={(event) => updateField("barcode", event.target.value)} />
-              <Input label="Stock quantity" type="number" value={form.stockQuantity} onChange={(event) => updateField("stockQuantity", event.target.value)} />
+              <Input label="Base stock quantity" type="number" disabled={!form.trackInventory} value={form.stockQuantity} onChange={(event) => updateField("stockQuantity", event.target.value)} hint="Used when the product has no sellable variants." />
             </div>
+
+            <div className="mt-5 grid gap-4 border-t border-stone-100 pt-4 dark:border-stone-800 sm:grid-cols-3">
+              <div className="border border-stone-200 p-4 dark:border-stone-800">
+                <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Inventory mode</p>
+                <p className="mt-2 text-sm font-medium text-stone-900 dark:text-white">{form.trackInventory ? "Tracked" : "Not tracked"}</p>
+              </div>
+              <div className="border border-stone-200 p-4 dark:border-stone-800">
+                <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Sellable units</p>
+                <p className="mt-2 text-sm font-medium text-stone-900 dark:text-white">{inventorySummary.totalInventory}</p>
+              </div>
+              <div className="border border-stone-200 p-4 dark:border-stone-800">
+                <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Variant count</p>
+                <p className="mt-2 text-sm font-medium text-stone-900 dark:text-white">{inventorySummary.variantCount}</p>
+              </div>
+            </div>
+
             <label className="mt-5 flex items-center justify-between border-t border-stone-100 pt-4 text-sm text-stone-600 dark:border-stone-800 dark:text-stone-300">
               <div>
                 <p className="font-medium text-stone-900 dark:text-white">Track inventory</p>
-                <p className="mt-1 text-xs text-stone-500">Keep stock-aware messaging and sell-through reporting accurate.</p>
+                <p className="mt-1 text-xs text-stone-500">Keep stock-aware messaging, low-stock surfacing, and sell-through reporting accurate.</p>
               </div>
               <input type="checkbox" checked={form.trackInventory} onChange={(event) => updateField("trackInventory", event.target.checked)} className="h-4 w-4 accent-stone-900" />
             </label>
+          </Card>
+
+          <Card>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xs font-medium uppercase tracking-widest text-stone-400">Variants</h2>
+                <p className="mt-2 text-sm text-stone-500">Add option-level pricing and inventory for serious catalog management.</p>
+              </div>
+              <Button type="button" size="sm" variant="outline" leftIcon={<Plus className="h-4 w-4" />} onClick={addVariant}>
+                Add variant
+              </Button>
+            </div>
+
+            {variants.length === 0 ? (
+              <div className="mt-5 border border-dashed border-stone-200 px-4 py-8 text-center text-sm text-stone-500 dark:border-stone-800">
+                Variants are optional. Add them when you need option-specific SKUs, stock, or price adjustments.
+              </div>
+            ) : (
+              <div className="mt-5 space-y-4">
+                {variants.map((variant, index) => (
+                  <div key={variant.id ?? `variant-${index}`} className="border border-stone-200 p-4 dark:border-stone-800">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">
+                        <Boxes className="h-3.5 w-3.5" />
+                        Variant {index + 1}
+                      </div>
+                      <button type="button" onClick={() => removeVariant(index)} className="text-xs font-medium uppercase tracking-wider text-stone-500 hover:text-red-600">
+                        Remove
+                      </button>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <Input label="Variant name" placeholder="Large / Walnut / Bundle" value={variant.name} onChange={(event) => updateVariant(index, "name", event.target.value)} />
+                      <Input label="Variant SKU" placeholder="WEEKENDER-L" value={variant.sku} onChange={(event) => updateVariant(index, "sku", event.target.value)} />
+                      <Input label="Price adjustment" type="number" step="0.01" value={variant.priceAdjustment} onChange={(event) => updateVariant(index, "priceAdjustment", event.target.value)} hint="Positive or negative amount added to the base price." />
+                      <Input label="Variant stock" type="number" disabled={!form.trackInventory} value={variant.stockQuantity} onChange={(event) => updateVariant(index, "stockQuantity", event.target.value)} />
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-medium uppercase tracking-widest text-stone-500 dark:text-stone-400">Variant options</label>
+                        <textarea
+                          rows={3}
+                          value={variant.optionsText}
+                          onChange={(event) => updateVariant(index, "optionsText", event.target.value)}
+                          placeholder="Size: Large, Color: Walnut"
+                          className="mt-1.5 w-full border-b border-stone-200 bg-transparent py-2 text-sm placeholder:text-stone-400 focus:border-stone-900 focus:outline-none dark:border-stone-700"
+                        />
+                        <p className="mt-1 text-xs text-stone-400">Use `Name: Value` pairs separated by commas so storefront selections stay clear.</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
 
           <Card>
@@ -425,12 +547,27 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
                     <p className="text-sm text-stone-900 dark:text-white">{form.name || "Product title preview"}</p>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-stone-900 dark:text-white">{formatPrice(pricePreview.price || 0)}</span>
-                      {pricePreview.hasDiscount && (
-                        <span className="text-xs text-stone-400 line-through">{formatPrice(pricePreview.compareAt)}</span>
-                      )}
+                      {pricePreview.hasDiscount ? <span className="text-xs text-stone-400 line-through">{formatPrice(pricePreview.compareAt)}</span> : null}
                     </div>
+                    {variants.filter((variant) => variant.name.trim()).length > 0 ? (
+                      <p className="text-xs text-stone-500">
+                        {variants.filter((variant) => variant.name.trim()).length} sellable variant
+                        {variants.filter((variant) => variant.name.trim()).length === 1 ? "" : "s"} configured
+                      </p>
+                    ) : null}
                   </div>
                 </div>
+              </div>
+
+              <div className="border border-dashed border-stone-200 p-4 dark:border-stone-800">
+                <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Operational readiness</p>
+                <p className="mt-2 text-sm text-stone-500">
+                  {inventorySummary.isOutOfStock
+                    ? "This listing is currently out of stock."
+                    : inventorySummary.isLowStock
+                      ? "Inventory is low. Review stock before pushing hard on merchandising."
+                      : "Inventory and variants are ready for review."}
+                </p>
               </div>
 
               <div className="flex gap-3">
