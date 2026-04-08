@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -13,12 +14,13 @@ export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
-    async function fetch() {
-      const sb = getSupabaseBrowserClient();
-      const { data } = await sb.from("categories").select("*").eq("is_active", true).is("parent_id", null).order("sort_order");
+    async function fetchCategories() {
+      const supabase = getSupabaseBrowserClient();
+      const { data } = await supabase.from("categories").select("*").eq("is_active", true).is("parent_id", null).order("sort_order");
       setCategories((data ?? []) as Category[]);
     }
-    fetch();
+
+    void fetchCategories();
   }, []);
 
   return (
@@ -29,23 +31,27 @@ export default function CategoriesPage() {
       </div>
 
       <motion.div variants={container} initial="hidden" animate="show" className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {categories.map((cat) => (
-          <motion.div key={cat.id} variants={item}>
-            <Link href={`/shop?category=${cat.slug}`} className="group block">
+        {categories.map((category) => (
+          <motion.div key={category.id} variants={item}>
+            <Link href={`/shop?category=${category.slug}`} className="group block">
               <div className="relative aspect-[4/3] overflow-hidden bg-stone-100 dark:bg-stone-800">
-                {cat.image_url ? (
-                  <img src={cat.image_url} alt={cat.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                {category.image_url ? (
+                  <Image
+                    src={category.image_url}
+                    alt={category.name}
+                    fill
+                    sizes="(min-width: 1024px) 33vw, 100vw"
+                    className="object-cover transition-transform duration-700 group-hover:scale-105"
+                  />
                 ) : (
                   <div className="flex h-full items-center justify-center">
-                    <span className="font-serif text-7xl text-stone-200 dark:text-stone-700">{cat.name[0]}</span>
+                    <span className="font-serif text-7xl text-stone-200 dark:text-stone-700">{category.name[0]}</span>
                   </div>
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-stone-900/60 to-transparent" />
                 <div className="absolute bottom-0 left-0 p-6">
-                  <h2 className="text-sm font-medium uppercase tracking-[0.2em] text-white">{cat.name}</h2>
-                  {cat.description && (
-                    <p className="mt-1 text-xs text-stone-300">{cat.description}</p>
-                  )}
+                  <h2 className="text-sm font-medium uppercase tracking-[0.2em] text-white">{category.name}</h2>
+                  {category.description ? <p className="mt-1 text-xs text-stone-300">{category.description}</p> : null}
                 </div>
               </div>
             </Link>
