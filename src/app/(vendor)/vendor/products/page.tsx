@@ -28,6 +28,16 @@ const statuses: { label: string; value: ProductStatus | "all" }[] = [
   { label: "Archived", value: "archived" },
 ];
 
+const productViews = [
+  { label: "All catalog", value: "all" },
+  { label: "Inventory risk", value: "inventory_risk" },
+  { label: "Draft review", value: "draft_review" },
+  { label: "Variant assortment", value: "variant_assortment" },
+  { label: "Active catalog", value: "active_catalog" },
+] as const;
+
+type ProductSavedView = (typeof productViews)[number]["value"];
+
 const bulkStatuses: Array<{ label: string; value: ProductStatus }> = [
   { label: "Publish selected", value: "active" },
   { label: "Pause selected", value: "paused" },
@@ -64,12 +74,55 @@ export default function VendorProductsPage() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<ProductStatus | "all">("all");
   const [search, setSearch] = useState("");
+  const [savedView, setSavedView] = useState<ProductSavedView>("all");
+  const [inventoryFilter, setInventoryFilter] = useState<"all" | "low_stock" | "out_of_stock" | "variant_managed" | "base_only">("all");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
   const [activeBulkStatus, setActiveBulkStatus] = useState<ProductStatus | null>(null);
   const [inventoryDrafts, setInventoryDrafts] = useState<Record<string, string>>({});
   const [bulkInventoryAdjustment, setBulkInventoryAdjustment] = useState("0");
   const [isBulkInventoryUpdating, setIsBulkInventoryUpdating] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const storedView = window.localStorage.getItem("nexcart.vendor.products.view") as ProductSavedView | null;
+    if (storedView && productViews.some((view) => view.value === storedView)) {
+      setSavedView(storedView);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("nexcart.vendor.products.view", savedView);
+
+    if (savedView === "inventory_risk") {
+      setStatus("all");
+      setInventoryFilter("low_stock");
+      return;
+    }
+
+    if (savedView === "draft_review") {
+      setStatus("draft");
+      setInventoryFilter("all");
+      return;
+    }
+
+    if (savedView === "variant_assortment") {
+      setStatus("all");
+      setInventoryFilter("variant_managed");
+      return;
+    }
+
+    if (savedView === "active_catalog") {
+      setStatus("active");
+      setInventoryFilter("all");
+      return;
+    }
+
+    setStatus("all");
+    setInventoryFilter("all");
+  }, [savedView]);
 
   const fetchProducts = useCallback(async () => {
     if (!store) return;
@@ -108,7 +161,31 @@ export default function VendorProductsPage() {
     void fetchProducts();
   }, [fetchProducts]);
 
-  const allVisibleSelected = products.length > 0 && products.every((product) => selectedIds.includes(product.id));
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const inventory = getInventorySummary(product);
+
+      if (inventoryFilter === "low_stock" && !inventory.isLowStock) {
+        return false;
+      }
+
+      if (inventoryFilter === "out_of_stock" && !inventory.isOutOfStock) {
+        return false;
+      }
+
+      if (inventoryFilter === "variant_managed" && (product.variants?.length ?? 0) === 0) {
+        return false;
+      }
+
+      if (inventoryFilter === "base_only" && (product.variants?.length ?? 0) > 0) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [inventoryFilter, products]);
+
+  const allVisibleSelected = filteredProducts.length > 0 && filteredProducts.every((product) => selectedIds.includes(product.id));
   const selectedCount = selectedIds.length;
   const selectionSummary = useMemo(
     () => `${selectedCount} selected listing${selectedCount === 1 ? "" : "s"}`,
@@ -143,7 +220,7 @@ export default function VendorProductsPage() {
       setSelectedIds([]);
       return;
     }
-    setSelectedIds(products.map((product) => product.id));
+    setSelectedIds(filteredProducts.map((product) => product.id));
   }
 
   function updateInventoryDraft(productId: string, value: string) {
@@ -224,15 +301,13 @@ export default function VendorProductsPage() {
       return;
     }
 
-    const eligibleProducts = products.filter(
-      (product) => selectedIds.includes(product.id) && product.track_inventory && (product.variants?.length ?? 0) === 0
-    );
+    const eligibleProducts = products.filter((product) => selectedIds.includes(product.id) && product.track_inventory);
 
     if (eligibleProducts.length === 0) {
       addToast({
         type: "info",
         title: "No eligible listings",
-        description: "Bulk stock adjustments currently apply only to tracked products without variants.",
+        description: "Bulk stock adjustments currently apply only to tracked listings.",
       });
       return;
     }
@@ -240,13 +315,26 @@ export default function VendorProductsPage() {
     setIsBulkInventoryUpdating(true);
     const supabase = getSupabaseBrowserClient();
     const directionValue = direction === "increase" ? adjustmentAmount : -adjustmentAmount;
-    const updates = eligibleProducts.map((product) =>
-      supabase
-        .from("products")
-        .update({ stock_quantity: Math.max(0, Number(product.stock_quantity ?? 0) + directionValue) })
-        .eq("id", product.id)
-        .eq("store_id", storeId)
-    );
+    const variantManagedCount = eligibleProducts.filter((product) => (product.variants?.length ?? 0) > 0).length;
+    const updates = eligibleProducts.flatMap((product) => {
+      if ((product.variants?.length ?? 0) > 0) {
+        return (product.variants ?? []).map((variant) =>
+          supabase
+            .from("product_variants")
+            .update({ stock_quantity: Math.max(0, Number(variant.stock_quantity ?? 0) + directionValue) })
+            .eq("id", variant.id)
+            .eq("product_id", product.id)
+        );
+      }
+
+      return [
+        supabase
+          .from("products")
+          .update({ stock_quantity: Math.max(0, Number(product.stock_quantity ?? 0) + directionValue) })
+          .eq("id", product.id)
+          .eq("store_id", storeId),
+      ];
+    });
 
     const results = await Promise.all(updates);
     const failedCount = results.filter((result) => result.error).length;
@@ -267,7 +355,8 @@ export default function VendorProductsPage() {
       title: "Inventory adjusted",
       description:
         `${eligibleProducts.length} listing${eligibleProducts.length === 1 ? "" : "s"} ${direction === "increase" ? "increased" : "decreased"} by ${adjustmentAmount}.` +
-        (skippedCount > 0 ? ` ${skippedCount} variant-managed or untracked listing${skippedCount === 1 ? " was" : "s were"} skipped.` : ""),
+        (variantManagedCount > 0 ? ` ${variantManagedCount} variant-managed listing${variantManagedCount === 1 ? "" : "s"} updated every variant.` : "") +
+        (skippedCount > 0 ? ` ${skippedCount} untracked listing${skippedCount === 1 ? " was" : "s were"} skipped.` : ""),
     });
     setIsBulkInventoryUpdating(false);
     setBulkInventoryAdjustment("0");
@@ -414,7 +503,7 @@ export default function VendorProductsPage() {
         <div>
           <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Products</h1>
           <p className="mt-1 text-sm text-stone-500">
-            {products.length} product{products.length !== 1 ? "s" : ""} in your store
+            {filteredProducts.length} of {products.length} product{products.length !== 1 ? "s" : ""} in your store
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -422,6 +511,23 @@ export default function VendorProductsPage() {
             <Button leftIcon={<Plus className="h-4 w-4" />}>Add product</Button>
           </Link>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {productViews.map((view) => (
+          <button
+            key={view.value}
+            type="button"
+            onClick={() => setSavedView(view.value)}
+            className={`px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-colors ${
+              savedView === view.value
+                ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900"
+                : "text-stone-500 hover:text-stone-900 dark:hover:text-white"
+            }`}
+          >
+            {view.label}
+          </button>
+        ))}
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -432,6 +538,7 @@ export default function VendorProductsPage() {
               type="button"
               onClick={() => {
                 setStatus(item.value);
+                setSavedView("all");
                 setSelectedIds([]);
               }}
               className={`px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-colors ${
@@ -444,13 +551,29 @@ export default function VendorProductsPage() {
             </button>
           ))}
         </div>
-        <input
-          type="text"
-          placeholder="Search products..."
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          className="h-9 w-64 border-b border-stone-200 bg-transparent text-sm placeholder:text-stone-400 focus:border-stone-900 focus:outline-none dark:border-stone-700"
-        />
+        <div className="flex items-center gap-3">
+          <select
+            value={inventoryFilter}
+            onChange={(event) => {
+              setInventoryFilter(event.target.value as typeof inventoryFilter);
+              setSavedView("all");
+            }}
+            className="h-9 border-b border-stone-200 bg-transparent text-sm text-stone-600 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-300"
+          >
+            <option value="all">All inventory</option>
+            <option value="low_stock">Low stock</option>
+            <option value="out_of_stock">Out of stock</option>
+            <option value="variant_managed">Variant-managed</option>
+            <option value="base_only">Base stock only</option>
+          </select>
+          <input
+            type="text"
+            placeholder="Search products..."
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="h-9 w-64 border-b border-stone-200 bg-transparent text-sm placeholder:text-stone-400 focus:border-stone-900 focus:outline-none dark:border-stone-700"
+          />
+        </div>
       </div>
 
       {selectedCount > 0 ? (
@@ -538,18 +661,18 @@ export default function VendorProductsPage() {
                   ))}
                 </tr>
               ))
-            ) : products.length === 0 ? (
+            ) : filteredProducts.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-4 py-16 text-center">
                   <Package className="mx-auto mb-3 h-8 w-8 text-stone-300" />
-                  <p className="font-serif text-lg text-stone-400">No products yet</p>
+                  <p className="font-serif text-lg text-stone-400">No products match this operational view</p>
                   <Link href="/vendor/products/new">
                     <Button size="sm" className="mt-3">Add your first product</Button>
                   </Link>
                 </td>
               </tr>
             ) : (
-              products.map((product) => {
+              filteredProducts.map((product) => {
                 const inventory = getInventorySummary(product);
                 const isBusy = activeRowId === product.id;
 
@@ -652,7 +775,7 @@ export default function VendorProductsPage() {
 
       {products.length > 0 ? (
         <div className="rounded-none border border-dashed border-stone-200 p-4 text-sm text-stone-500 dark:border-stone-800">
-          Bulk actions always keep duplicated products in draft so inventory, variants, and merchandising can be reviewed before anything goes live.
+          Bulk actions always keep duplicated products in draft so inventory, variants, and merchandising can be reviewed before anything goes live. Inventory adjustments apply to base stock or every variant when a listing is variant-managed.
         </div>
       ) : null}
     </motion.div>
