@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Store, Users, Package, Shield, ArrowLeft, Flag } from "lucide-react";
+import { LayoutDashboard, Store, Users, Package, Shield, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 const adminNav = [

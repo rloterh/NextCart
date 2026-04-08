@@ -3,9 +3,14 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Users, Store, Package, ShoppingCart, DollarSign, TrendingUp } from "lucide-react";
-import { Card, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatPrice } from "@/lib/utils/constants";
+
+interface OrderSummary {
+  total: number;
+  status: string;
+}
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({ users: 0, vendors: 0, products: 0, orders: 0, revenue: 0, pendingVendors: 0 });
@@ -22,8 +27,10 @@ export default function AdminDashboard() {
         sb.from("orders").select("total, status"),
       ]);
 
-      const orders = ordersRes.data ?? [];
-      const revenue = orders.filter((o: any) => o.status === "delivered").reduce((s: number, o: any) => s + Number(o.total), 0);
+      const orders = (ordersRes.data ?? []) as OrderSummary[];
+      const revenue = orders
+        .filter((order) => order.status === "delivered")
+        .reduce((sum, order) => sum + Number(order.total), 0);
 
       setStats({
         users: usersRes.count ?? 0,
@@ -58,14 +65,14 @@ export default function AdminDashboard() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {kpis.map((kpi) => (
-          <div key={kpi.label} className="border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+          <Card key={kpi.label} className="p-5">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium uppercase tracking-widest text-stone-400">{kpi.label}</p>
               <div className={`p-2 ${kpi.color}`}><kpi.icon className="h-4 w-4" /></div>
             </div>
             <p className="mt-3 text-2xl font-medium text-stone-900 dark:text-white">{kpi.value}</p>
             {kpi.badge && <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">{kpi.badge}</p>}
-          </div>
+          </Card>
         ))}
       </div>
     </motion.div>
