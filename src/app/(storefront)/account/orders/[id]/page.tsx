@@ -5,18 +5,20 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, MapPin, Truck } from "lucide-react";
+import { ArrowLeft, Mail, MapPin, Truck } from "lucide-react";
 import { Card, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatDate, formatPrice } from "@/lib/utils/constants";
-import type { Order, OrderItem, CheckoutShippingAddress } from "@/types/orders";
+import { orderStatusCopy } from "@/lib/orders/status-copy";
+import { getStoreProfileContent } from "@/lib/storefront/store-profile";
 import type { Store } from "@/types";
+import type { CheckoutShippingAddress, Order, OrderItem } from "@/types/orders";
 
 const statusSteps = ["pending", "confirmed", "processing", "shipped", "delivered"] as const;
 
 type BuyerOrderDetail = Order & {
-  store: Pick<Store, "name" | "slug"> | null;
+  store: Pick<Store, "name" | "slug" | "settings"> | null;
   items: OrderItem[];
 };
 
@@ -41,7 +43,7 @@ export default function BuyerOrderDetailPage() {
       const sb = getSupabaseBrowserClient();
       const { data, error: queryError } = await sb
         .from("orders")
-        .select("*, store:stores(name, slug), items:order_items(*)")
+        .select("*, store:stores(name, slug, settings), items:order_items(*)")
         .eq("id", id)
         .eq("buyer_id", user.id)
         .single();
@@ -91,6 +93,8 @@ export default function BuyerOrderDetailPage() {
 
   const currentStep = statusSteps.indexOf(order.status as (typeof statusSteps)[number]);
   const address = order.shipping_address as CheckoutShippingAddress | null;
+  const storeProfile = order.store ? getStoreProfileContent(order.store) : null;
+  const statusContent = orderStatusCopy[order.status];
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-3xl space-y-6 px-6 py-8">
@@ -107,6 +111,12 @@ export default function BuyerOrderDetailPage() {
           </p>
         </div>
       </div>
+
+      <Card>
+        <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Order status</p>
+        <h2 className="mt-2 font-serif text-2xl text-stone-900 dark:text-white">{statusContent.label}</h2>
+        <p className="mt-2 text-sm leading-relaxed text-stone-500">{statusContent.buyerMessage}</p>
+      </Card>
 
       {order.status !== "cancelled" && order.status !== "refunded" ? (
         <Card>
@@ -142,15 +152,7 @@ export default function BuyerOrderDetailPage() {
           {order.items.map((item) => (
             <div key={item.id} className="flex items-center gap-4 py-3">
               <div className="relative h-16 w-14 shrink-0 overflow-hidden bg-stone-100 dark:bg-stone-800">
-                {item.product_image ? (
-                  <Image
-                    src={item.product_image}
-                    alt={item.product_name}
-                    fill
-                    sizes="56px"
-                    className="object-cover"
-                  />
-                ) : null}
+                {item.product_image ? <Image src={item.product_image} alt={item.product_name} fill sizes="56px" className="object-cover" /> : null}
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium text-stone-900 dark:text-white">{item.product_name}</p>
@@ -182,25 +184,39 @@ export default function BuyerOrderDetailPage() {
         </div>
       </Card>
 
-      {address ? (
+      <div className="grid gap-6 md:grid-cols-2">
+        {address ? (
+          <Card>
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-stone-400" />
+              <CardTitle>Shipping address</CardTitle>
+            </div>
+            <div className="mt-3 text-sm text-stone-600 dark:text-stone-400">
+              <p className="font-medium text-stone-900 dark:text-white">{address.fullName}</p>
+              <p>
+                {address.line1}
+                {address.line2 ? `, ${address.line2}` : ""}
+              </p>
+              <p>
+                {address.city}, {address.state} {address.postalCode}
+              </p>
+              {address.phone ? <p className="mt-1">{address.phone}</p> : null}
+            </div>
+          </Card>
+        ) : null}
+
         <Card>
           <div className="flex items-center gap-2">
-            <MapPin className="h-4 w-4 text-stone-400" />
-            <CardTitle>Shipping address</CardTitle>
+            <Mail className="h-4 w-4 text-stone-400" />
+            <CardTitle>Communication</CardTitle>
           </div>
-          <div className="mt-3 text-sm text-stone-600 dark:text-stone-400">
-            <p className="font-medium text-stone-900 dark:text-white">{address.fullName}</p>
-            <p>
-              {address.line1}
-              {address.line2 ? `, ${address.line2}` : ""}
-            </p>
-            <p>
-              {address.city}, {address.state} {address.postalCode}
-            </p>
-            {address.phone ? <p className="mt-1">{address.phone}</p> : null}
+          <div className="mt-3 space-y-3 text-sm text-stone-600 dark:text-stone-400">
+            <p>{storeProfile?.shippingNote || "Shipping, packaging, and support context will continue to appear here as the vendor updates the order."}</p>
+            <p>{storeProfile?.processingTime || "You can revisit this page any time to confirm whether the order has moved from confirmation into shipment."}</p>
+            {storeProfile?.supportEmail ? <p className="text-stone-900 dark:text-white">Support: {storeProfile.supportEmail}</p> : null}
           </div>
         </Card>
-      ) : null}
+      </div>
 
       {order.tracking_number ? (
         <Card>
@@ -209,6 +225,7 @@ export default function BuyerOrderDetailPage() {
             <CardTitle>Tracking</CardTitle>
           </div>
           <p className="mt-2 text-sm font-medium text-stone-900 dark:text-white">{order.tracking_number}</p>
+          <p className="mt-2 text-sm text-stone-500">Tracking details are shared here once the vendor books and updates the shipment.</p>
           {order.tracking_url ? (
             <a href={order.tracking_url} target="_blank" rel="noreferrer" className="mt-1 text-xs text-amber-700 hover:underline">
               Track shipment

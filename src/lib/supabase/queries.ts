@@ -190,6 +190,7 @@ export async function getVendorProducts(storeId: string, filters: { status?: str
 
 export async function getVendorStats(storeId: string) {
   const supabase = await getSupabaseServerClient();
+  type VendorProductMetricRow = Pick<Product, "view_count" | "sale_count" | "price">;
 
   const [productsRes, activeRes, viewsRes] = await Promise.all([
     supabase.from("products").select("*", { count: "exact", head: true }).eq("store_id", storeId),
@@ -197,10 +198,10 @@ export async function getVendorStats(storeId: string) {
     supabase.from("products").select("view_count, sale_count, price").eq("store_id", storeId),
   ]);
 
-  const products = viewsRes.data ?? [];
-  const totalViews = products.reduce((s, p: any) => s + (p.view_count ?? 0), 0);
-  const totalSales = products.reduce((s, p: any) => s + (p.sale_count ?? 0), 0);
-  const revenue = products.reduce((s, p: any) => s + (p.sale_count ?? 0) * Number(p.price), 0);
+  const products = (viewsRes.data ?? []) as VendorProductMetricRow[];
+  const totalViews = products.reduce((sum, product) => sum + (product.view_count ?? 0), 0);
+  const totalSales = products.reduce((sum, product) => sum + (product.sale_count ?? 0), 0);
+  const revenue = products.reduce((sum, product) => sum + (product.sale_count ?? 0) * Number(product.price), 0);
 
   return {
     totalProducts: productsRes.count ?? 0,

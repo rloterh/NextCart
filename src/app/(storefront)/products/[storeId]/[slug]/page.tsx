@@ -5,16 +5,19 @@ import Image from "next/image";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ShoppingBag, Minus, Plus, Star, Truck, RotateCcw, Shield, ChevronRight } from "lucide-react";
+import { ShoppingBag, Minus, Plus, Star, Truck, RotateCcw, Shield, ChevronRight, Store as StoreIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CompareButton } from "@/components/storefront/compare-button";
 import { WishlistButton } from "@/components/storefront/wishlist-button";
 import { ProductCard } from "@/components/ui/product-card";
 import { ReviewForm, ReviewList } from "@/components/ui/reviews";
 import { useCartStore } from "@/stores/cart-store";
+import { useDiscoveryStore } from "@/stores/discovery-store";
 import { useUIStore } from "@/stores/ui-store";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatPrice } from "@/lib/utils/constants";
 import { productJsonLd } from "@/lib/seo/structured-data";
+import { getStoreProfileContent, getStoreTrustBadges } from "@/lib/storefront/store-profile";
 import type { Category, Product, Store } from "@/types";
 
 type ProductWithRelations = Product & {
@@ -26,6 +29,7 @@ export default function ProductDetailPage() {
   const { storeId, slug } = useParams<{ storeId: string; slug: string }>();
   const addItem = useCartStore((s) => s.addItem);
   const addToast = useUIStore((s) => s.addToast);
+  const addRecentlyViewed = useDiscoveryStore((state) => state.addRecentlyViewed);
   const [product, setProduct] = useState<ProductWithRelations | null>(null);
   const [related, setRelated] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +70,20 @@ export default function ProductDetailPage() {
     if (storeId && slug) fetch();
   }, [storeId, slug]);
 
+  useEffect(() => {
+    if (!product) return;
+
+    addRecentlyViewed({
+      id: product.id,
+      storeId: product.store_id,
+      slug: product.slug,
+      name: product.name,
+      image: product.images?.[0] ?? null,
+      price: Number(product.price),
+      storeName: product.store?.name ?? undefined,
+    });
+  }, [addRecentlyViewed, product]);
+
   function handleAddToCart() {
     if (!product) return;
     addItem(product, undefined, quantity);
@@ -99,6 +117,8 @@ export default function ProductDetailPage() {
   const hasDiscount = product.compare_at_price && product.compare_at_price > product.price;
   const store = product.store;
   const images = product.images?.length ? product.images : [null];
+  const storeProfile = store ? getStoreProfileContent(store) : null;
+  const trustBadges = store ? getStoreTrustBadges(store) : [];
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
@@ -208,6 +228,7 @@ export default function ProductDetailPage() {
             </Button>
 
             <WishlistButton productId={product.id} productName={product.name} className="h-12 w-12 border-stone-200 dark:border-stone-700" />
+            <CompareButton product={product} className="h-12 w-12 border-stone-200 dark:border-stone-700" />
           </div>
 
           {/* Stock */}
@@ -220,8 +241,8 @@ export default function ProductDetailPage() {
           {/* Trust signals */}
           <div className="mt-8 grid grid-cols-3 gap-4 border-t border-stone-200 pt-6 dark:border-stone-800">
             {[
-              { icon: Truck, label: "Free shipping", desc: "Orders $75+" },
-              { icon: RotateCcw, label: "Easy returns", desc: "30 day policy" },
+              { icon: Truck, label: "Shipping clarity", desc: storeProfile?.shippingNote || storeProfile?.processingTime || "Orders $75+" },
+              { icon: RotateCcw, label: "Returns", desc: storeProfile?.returnsPolicy || "30 day policy" },
               { icon: Shield, label: "Secure", desc: "Stripe checkout" },
             ].map((item) => (
               <div key={item.label} className="text-center">
@@ -240,6 +261,53 @@ export default function ProductDetailPage() {
                   {tag}
                 </span>
               ))}
+            </div>
+          )}
+
+          {store && (
+            <div className="mt-8 space-y-4 border-t border-stone-200 pt-6 dark:border-stone-800">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Vendor trust</p>
+                  <h2 className="mt-2 font-serif text-2xl text-stone-900 dark:text-white">{store.name}</h2>
+                  <p className="mt-2 text-sm leading-relaxed text-stone-500">
+                    {storeProfile?.storyHeadline || store.description || "This vendor is approved for marketplace visibility and product discovery."}
+                  </p>
+                </div>
+                <Link href={`/vendors/${store.slug}`} className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-amber-700 hover:text-amber-800 dark:text-amber-500">
+                  View vendor profile
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+
+              {trustBadges.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {trustBadges.map((badge) => (
+                    <span key={badge.label} className="border border-stone-200 px-2.5 py-1 text-[10px] uppercase tracking-widest text-stone-500 dark:border-stone-700">
+                      {badge.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="border border-stone-200 p-4 dark:border-stone-800">
+                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">
+                    <StoreIcon className="h-3.5 w-3.5" />
+                    Craft and fulfillment
+                  </div>
+                  <p className="mt-3 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
+                    {storeProfile?.craftsmanshipNote || storeProfile?.shippingNote || "Vendor-specific shipping and craftsmanship details will appear here as the storefront story is expanded."}
+                  </p>
+                </div>
+                <div className="border border-stone-200 p-4 dark:border-stone-800">
+                  <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Service promise</p>
+                  <div className="mt-3 space-y-2 text-sm text-stone-600 dark:text-stone-400">
+                    <p>{storeProfile?.processingTime || "Standard processing window applies."}</p>
+                    <p>{storeProfile?.returnsPolicy || "Returns and order issue support are reviewed before checkout."}</p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>

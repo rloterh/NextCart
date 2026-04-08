@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { SlidersHorizontal, X } from "lucide-react";
+import { SavedSearchesPanel } from "@/components/storefront/saved-searches-panel";
 import { ProductCard } from "@/components/ui/product-card";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Product, Category } from "@/types";
@@ -21,6 +22,7 @@ export function ShopPageClient() {
   const searchParams = useSearchParams();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [storeName, setStoreName] = useState("");
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -28,6 +30,7 @@ export function ShopPageClient() {
   const currentSort = searchParams.get("sort") || "newest";
   const currentCategory = searchParams.get("category") || "";
   const currentSearch = searchParams.get("q") || "";
+  const currentStore = searchParams.get("store") || "";
   const currentPage = Number(searchParams.get("page") || "1");
 
   function updateParams(key: string, value: string) {
@@ -59,6 +62,13 @@ export function ShopPageClient() {
       const { data: cat } = await sb.from("categories").select("id").eq("slug", currentCategory).single();
       if (cat) query = query.eq("category_id", cat.id);
     }
+    if (currentStore) {
+      query = query.eq("store_id", currentStore);
+      const { data: store } = await sb.from("stores").select("name").eq("id", currentStore).single();
+      setStoreName(store?.name ?? "");
+    } else {
+      setStoreName("");
+    }
     if (currentSearch) query = query.ilike("name", `%${currentSearch}%`);
 
     switch (currentSort) {
@@ -77,20 +87,25 @@ export function ShopPageClient() {
     setProducts((data ?? []) as Product[]);
     setTotal(count ?? 0);
     setLoading(false);
-  }, [currentSort, currentCategory, currentSearch, currentPage]);
+  }, [currentSort, currentCategory, currentSearch, currentPage, currentStore]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const totalPages = Math.ceil(total / 12);
-  const activeFilters = [currentCategory, currentSearch].filter(Boolean).length;
+  const activeFilters = [currentCategory, currentSearch, currentStore].filter(Boolean).length;
+  const pageTitle = currentCategory
+    ? categories.find((category) => category.slug === currentCategory)?.name ?? "Shop"
+    : currentSearch
+      ? `Results for "${currentSearch}"`
+      : currentStore
+        ? `Products from ${storeName || "this vendor"}`
+        : "Shop All";
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
       <div className="mb-8 flex items-end justify-between">
         <div>
-          <h1 className="font-serif text-3xl text-stone-900 dark:text-white">
-            {currentCategory ? categories.find((c) => c.slug === currentCategory)?.name ?? "Shop" : currentSearch ? `Results for "${currentSearch}"` : "Shop All"}
-          </h1>
+          <h1 className="font-serif text-3xl text-stone-900 dark:text-white">{pageTitle}</h1>
           <p className="mt-1 text-sm text-stone-500">{total} product{total !== 1 ? "s" : ""}</p>
         </div>
         <div className="flex items-center gap-3">
@@ -151,9 +166,16 @@ export function ShopPageClient() {
                       &quot;{currentSearch}&quot; <X className="h-3 w-3" />
                     </button>
                   )}
+                  {currentStore && (
+                    <button onClick={() => updateParams("store", "")} className="flex items-center gap-1 border border-stone-200 px-2 py-1 text-xs text-stone-600 hover:border-stone-400 dark:border-stone-700">
+                      {storeName || "Vendor"} <X className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
               </div>
             )}
+
+            <SavedSearchesPanel currentSearch={currentSearch} currentCategory={currentCategory} currentSort={currentSort} />
           </div>
         </aside>
 

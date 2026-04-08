@@ -1,9 +1,10 @@
 import { create } from "zustand";
+import type { User } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Profile, Store } from "@/types";
 
 interface AuthState {
-  user: any | null;
+  user: User | null;
   profile: Profile | null;
   store: Store | null;
   isLoading: boolean;

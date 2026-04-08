@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ChevronRight, Package } from "lucide-react";
+import { ChevronRight, Mail, Package, Truck } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatDate, formatPrice } from "@/lib/utils/constants";
+import { orderStatusCopy } from "@/lib/orders/status-copy";
 import type { Order, OrderItem } from "@/types/orders";
 import type { OrderStatus, Store } from "@/types";
 
@@ -103,6 +104,7 @@ export default function BuyerOrdersPage() {
                     <p className="text-xs text-stone-500">
                       {formatDate(order.created_at)} &middot; {order.store?.name ?? "Marketplace order"}
                     </p>
+                    <p className="mt-1 text-xs text-stone-500">{orderStatusCopy[order.status].buyerMessage}</p>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className={`px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusColors[order.status]}`}>
@@ -134,6 +136,16 @@ export default function BuyerOrdersPage() {
                     ) : null}
                   </div>
                 )}
+                <div className="mt-4 flex flex-wrap gap-3 border-t border-stone-100 pt-3 text-[11px] text-stone-500 dark:border-stone-800">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Truck className="h-3.5 w-3.5" />
+                    Shipment updates appear here as soon as the vendor adds them
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Mail className="h-3.5 w-3.5" />
+                    Order communication stays visible in your account history
+                  </span>
+                </div>
               </Link>
             </motion.div>
           ))
