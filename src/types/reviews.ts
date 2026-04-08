@@ -18,6 +18,13 @@ export interface Review {
   profile?: Pick<Profile, "full_name" | "avatar_url">;
 }
 
+export interface ReviewHelpfulVote {
+  id: string;
+  review_id: string;
+  user_id: string;
+  created_at: string;
+}
+
 export interface ReviewStats {
   average: number;
   total: number;

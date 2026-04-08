@@ -145,10 +145,14 @@ const emptyStats: ReviewStats = {
 };
 
 export function ReviewList({ productId, refreshKey }: ReviewListProps) {
+  const { isAuthenticated, profile } = useAuth();
+  const addToast = useUIStore((state) => state.addToast);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [stats, setStats] = useState<ReviewStats>(emptyStats);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [votedReviewIds, setVotedReviewIds] = useState<string[]>([]);
+  const [helpfulReviewId, setHelpfulReviewId] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchReviews() {
@@ -196,11 +200,24 @@ export function ReviewList({ productId, refreshKey }: ReviewListProps) {
         verifiedCount,
         recommendationRate: nextReviews.length > 0 ? Math.round((recommendedCount / nextReviews.length) * 100) : 0,
       });
+
+      if (isAuthenticated && profile?.id && nextReviews.length > 0) {
+        const { data: helpfulVotes } = await supabase
+          .from("review_helpful_votes")
+          .select("review_id")
+          .eq("user_id", profile.id)
+          .in("review_id", nextReviews.map((review) => review.id));
+
+        setVotedReviewIds((helpfulVotes ?? []).map((vote) => vote.review_id as string));
+      } else {
+        setVotedReviewIds([]);
+      }
+
       setLoading(false);
     }
 
     void fetchReviews();
-  }, [productId, refreshKey]);
+  }, [isAuthenticated, productId, profile?.id, refreshKey]);
 
   const headline = useMemo(() => {
     if (stats.total === 0) {
@@ -234,6 +251,57 @@ export function ReviewList({ productId, refreshKey }: ReviewListProps) {
         We could not load reviews right now. {error}
       </div>
     );
+  }
+
+  async function handleHelpful(reviewId: string) {
+    if (!isAuthenticated) {
+      addToast({
+        type: "info",
+        title: "Sign in to vote",
+        description: "Helpful votes are saved to your account so each review only gets one vote from you.",
+      });
+      return;
+    }
+
+    if (votedReviewIds.includes(reviewId)) {
+      addToast({
+        type: "info",
+        title: "Helpful vote already recorded",
+        description: "You have already marked this review as helpful.",
+      });
+      return;
+    }
+
+    setHelpfulReviewId(reviewId);
+
+    try {
+      const response = await fetch(`/api/reviews/${reviewId}/helpful`, { method: "POST" });
+      const payload = (await response.json()) as { helpfulCount?: number; error?: string };
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Unable to save your helpful vote.");
+      }
+
+      setReviews((current) =>
+        current.map((review) =>
+          review.id === reviewId ? { ...review, helpful_count: payload.helpfulCount ?? review.helpful_count + 1 } : review
+        )
+      );
+      setVotedReviewIds((current) => [...current, reviewId]);
+      addToast({
+        type: "success",
+        title: "Helpful vote saved",
+        description: "Thanks for helping highlight useful buyer feedback.",
+      });
+    } catch (voteError) {
+      addToast({
+        type: "error",
+        title: "Helpful vote failed",
+        description: voteError instanceof Error ? voteError.message : "Unable to save your vote right now.",
+      });
+    } finally {
+      setHelpfulReviewId(null);
+    }
   }
 
   return (
@@ -303,9 +371,14 @@ export function ReviewList({ productId, refreshKey }: ReviewListProps) {
               {review.body ? <p className="mt-2 text-sm leading-relaxed text-stone-600 dark:text-stone-400">{review.body}</p> : null}
               <div className="mt-3 flex items-center gap-4">
                 <p className="text-xs text-stone-500">{review.profile?.full_name ?? "Anonymous buyer"}</p>
-                <button type="button" className="flex items-center gap-1 text-xs text-stone-400 hover:text-stone-600 dark:hover:text-stone-300">
+                <button
+                  type="button"
+                  onClick={() => void handleHelpful(review.id)}
+                  disabled={helpfulReviewId === review.id || votedReviewIds.includes(review.id)}
+                  className="flex items-center gap-1 text-xs text-stone-400 hover:text-stone-600 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:text-stone-300"
+                >
                   <ThumbsUp className="h-3 w-3" />
-                  Helpful ({review.helpful_count})
+                  {votedReviewIds.includes(review.id) ? "Helpful saved" : "Helpful"} ({review.helpful_count})
                 </button>
               </div>
             </div>
