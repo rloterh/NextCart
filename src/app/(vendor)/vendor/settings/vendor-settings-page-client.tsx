@@ -23,6 +23,11 @@ interface StoreSettingsFormState {
   bannerUrl: string;
   supportEmail: string;
   shippingNote: string;
+  storyHeadline: string;
+  craftsmanshipNote: string;
+  returnsPolicy: string;
+  processingTime: string;
+  policyHighlights: string;
 }
 
 export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClientProps) {
@@ -36,6 +41,11 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
     bannerUrl: "",
     supportEmail: "",
     shippingNote: "",
+    storyHeadline: "",
+    craftsmanshipNote: "",
+    returnsPolicy: "",
+    processingTime: "",
+    policyHighlights: "",
   });
   const [isSaving, setIsSaving] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
@@ -53,6 +63,11 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
       bannerUrl: store.banner_url ?? "",
       supportEmail: typeof settings.supportEmail === "string" ? settings.supportEmail : user?.email ?? "",
       shippingNote: typeof settings.shippingNote === "string" ? settings.shippingNote : "",
+      storyHeadline: typeof settings.storyHeadline === "string" ? settings.storyHeadline : "",
+      craftsmanshipNote: typeof settings.craftsmanshipNote === "string" ? settings.craftsmanshipNote : "",
+      returnsPolicy: typeof settings.returnsPolicy === "string" ? settings.returnsPolicy : "",
+      processingTime: typeof settings.processingTime === "string" ? settings.processingTime : "",
+      policyHighlights: Array.isArray(settings.policyHighlights) ? settings.policyHighlights.filter((value): value is string => typeof value === "string").join(", ") : "",
     });
   }, [store, user?.email]);
 
@@ -137,6 +152,15 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
           ...(store.settings ?? {}),
           supportEmail: form.supportEmail.trim() || null,
           shippingNote: form.shippingNote.trim() || null,
+          storyHeadline: form.storyHeadline.trim() || null,
+          craftsmanshipNote: form.craftsmanshipNote.trim() || null,
+          returnsPolicy: form.returnsPolicy.trim() || null,
+          processingTime: form.processingTime.trim() || null,
+          policyHighlights: form.policyHighlights
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean)
+            .slice(0, 4),
         },
       })
       .eq("id", store.id);
@@ -243,6 +267,8 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
                 <label className="block text-xs font-medium uppercase tracking-widest text-stone-500 dark:text-stone-400">Description</label>
                 <textarea rows={5} value={form.description} onChange={(event) => updateField("description", event.target.value)} className="mt-1.5 w-full border-b border-stone-200 bg-transparent py-2 text-sm placeholder:text-stone-400 focus:border-stone-900 focus:outline-none dark:border-stone-700" placeholder="Tell buyers what your store is known for, what craftsmanship or curation standard sets it apart, and why it belongs in NexCart." />
               </div>
+              <Input label="Story headline" value={form.storyHeadline} onChange={(event) => updateField("storyHeadline", event.target.value)} hint="Short editorial line shown on vendor trust surfaces." />
+              <Input label="Processing promise" value={form.processingTime} onChange={(event) => updateField("processingTime", event.target.value)} hint="Example: Ships in 2-3 business days" />
               <Input label="Logo URL" value={form.logoUrl} onChange={(event) => updateField("logoUrl", event.target.value)} />
               <Input label="Banner URL" value={form.bannerUrl} onChange={(event) => updateField("bannerUrl", event.target.value)} />
             </div>
@@ -257,6 +283,15 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
                 <label className="block text-xs font-medium uppercase tracking-widest text-stone-500 dark:text-stone-400">Shipping and fulfillment note</label>
                 <textarea rows={4} value={form.shippingNote} onChange={(event) => updateField("shippingNote", event.target.value)} className="mt-1.5 w-full border-b border-stone-200 bg-transparent py-2 text-sm placeholder:text-stone-400 focus:border-stone-900 focus:outline-none dark:border-stone-700" placeholder="Share lead times, packaging details, or special fulfillment expectations for buyers." />
               </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium uppercase tracking-widest text-stone-500 dark:text-stone-400">Returns policy</label>
+                <textarea rows={4} value={form.returnsPolicy} onChange={(event) => updateField("returnsPolicy", event.target.value)} className="mt-1.5 w-full border-b border-stone-200 bg-transparent py-2 text-sm placeholder:text-stone-400 focus:border-stone-900 focus:outline-none dark:border-stone-700" placeholder="Explain return windows, exchange expectations, and any made-to-order exceptions." />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium uppercase tracking-widest text-stone-500 dark:text-stone-400">Craftsmanship note</label>
+                <textarea rows={4} value={form.craftsmanshipNote} onChange={(event) => updateField("craftsmanshipNote", event.target.value)} className="mt-1.5 w-full border-b border-stone-200 bg-transparent py-2 text-sm placeholder:text-stone-400 focus:border-stone-900 focus:outline-none dark:border-stone-700" placeholder="Share sourcing details, handmade process, materials, or service standards that build buyer confidence." />
+              </div>
+              <Input label="Policy highlights" value={form.policyHighlights} onChange={(event) => updateField("policyHighlights", event.target.value)} hint="Comma separated points like Free returns, Gift-ready packaging, Small-batch production." />
             </div>
 
             <div className="mt-6 flex justify-end">
