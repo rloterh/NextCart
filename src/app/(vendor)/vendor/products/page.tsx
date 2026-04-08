@@ -67,6 +67,7 @@ export default function VendorProductsPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
   const [activeBulkStatus, setActiveBulkStatus] = useState<ProductStatus | null>(null);
+  const [inventoryDrafts, setInventoryDrafts] = useState<Record<string, string>>({});
 
   const fetchProducts = useCallback(async () => {
     if (!store) return;
@@ -88,7 +89,14 @@ export default function VendorProductsPage() {
       addToast({ type: "error", title: "Unable to load products", description: error.message });
       setProducts([]);
     } else {
-      setProducts((data ?? []) as VendorProduct[]);
+      const nextProducts = (data ?? []) as VendorProduct[];
+      setProducts(nextProducts);
+      setInventoryDrafts(
+        nextProducts.reduce<Record<string, string>>((accumulator, product) => {
+          accumulator[product.id] = String(product.stock_quantity ?? 0);
+          return accumulator;
+        }, {})
+      );
     }
 
     setLoading(false);
@@ -134,6 +142,10 @@ export default function VendorProductsPage() {
       return;
     }
     setSelectedIds(products.map((product) => product.id));
+  }
+
+  function updateInventoryDraft(productId: string, value: string) {
+    setInventoryDrafts((current) => ({ ...current, [productId]: value }));
   }
 
   async function updateProductStatus(productId: string, nextStatus: ProductStatus) {
@@ -279,6 +291,49 @@ export default function VendorProductsPage() {
     setActiveRowId(null);
     router.push(`/vendor/products/${createdProduct.id}`);
     router.refresh();
+  }
+
+  async function saveInlineInventory(product: VendorProduct) {
+    if (product.variants?.length) {
+      addToast({
+        type: "info",
+        title: "Variant stock managed in editor",
+        description: "This listing uses variants, so stock should be updated from the product editor.",
+      });
+      return;
+    }
+
+    const nextStock = Number(inventoryDrafts[product.id] ?? product.stock_quantity);
+    if (Number.isNaN(nextStock) || nextStock < 0) {
+      addToast({
+        type: "error",
+        title: "Invalid stock quantity",
+        description: "Use a zero or positive number before saving inventory.",
+      });
+      return;
+    }
+
+    setActiveRowId(product.id);
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase
+      .from("products")
+      .update({ stock_quantity: nextStock })
+      .eq("id", product.id)
+      .eq("store_id", storeId);
+
+    if (error) {
+      addToast({ type: "error", title: "Unable to update inventory", description: error.message });
+      setActiveRowId(null);
+      return;
+    }
+
+    addToast({
+      type: "success",
+      title: "Inventory updated",
+      description: `${product.name} now has ${nextStock} sellable unit${nextStock === 1 ? "" : "s"}.`,
+    });
+    setActiveRowId(null);
+    await fetchProducts();
   }
 
   return (
@@ -436,7 +491,28 @@ export default function VendorProductsPage() {
                     <td className="px-4 py-3 text-right">
                       {product.track_inventory ? (
                         <div className="space-y-1 text-sm text-stone-500">
-                          <p className="text-stone-900 dark:text-white">{inventory.totalInventory}</p>
+                          {product.variants?.length ? (
+                            <p className="text-stone-900 dark:text-white">{inventory.totalInventory}</p>
+                          ) : (
+                            <div className="flex items-center justify-end gap-2">
+                              <input
+                                type="number"
+                                min="0"
+                                value={inventoryDrafts[product.id] ?? String(product.stock_quantity ?? 0)}
+                                onChange={(event) => updateInventoryDraft(product.id, event.target.value)}
+                                className="h-9 w-20 border-b border-stone-200 bg-transparent text-right text-sm text-stone-900 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-white"
+                              />
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                isLoading={isBusy}
+                                onClick={() => void saveInlineInventory(product)}
+                              >
+                                Save
+                              </Button>
+                            </div>
+                          )}
                           <p className="text-[10px] uppercase tracking-wider text-stone-400">
                             {inventory.variantCount > 0 ? `${inventory.variantCount} variant${inventory.variantCount === 1 ? "" : "s"}` : "Base stock"}
                           </p>

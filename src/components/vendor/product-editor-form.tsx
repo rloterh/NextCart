@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { uploadProductImage } from "@/lib/supabase/storage";
-import { getInventorySummary, textToVariantOptions, toEditableVariant, type EditableVariant } from "@/lib/vendor/catalog";
+import { ensureUniqueProductSlug, getInventorySummary, textToVariantOptions, toEditableVariant, type EditableVariant } from "@/lib/vendor/catalog";
 import { formatPrice, slugify } from "@/lib/utils/constants";
 import { useUIStore } from "@/stores/ui-store";
 import type { Category, Product, ProductStatus, ProductVariant } from "@/types";
@@ -120,6 +120,7 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
     () => getInventorySummary({ track_inventory: form.trackInventory, stock_quantity: Number(form.stockQuantity || 0), variants: normalizedVariantsPreview }),
     [form.stockQuantity, form.trackInventory, normalizedVariantsPreview]
   );
+  const slugPreview = useMemo(() => slugify(form.name.trim() || product?.name || "product"), [form.name, product?.name]);
 
   async function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
@@ -221,10 +222,15 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
     }));
 
     const supabase = getSupabaseBrowserClient();
+    const resolvedSlug = await ensureUniqueProductSlug({
+      storeId: store.id,
+      baseName: form.name.trim(),
+      currentProductId: mode === "edit" ? product?.id : undefined,
+    });
     const payload = {
       store_id: store.id,
       name: form.name.trim(),
-      slug: slugify(form.name.trim()),
+      slug: resolvedSlug,
       description: form.description.trim() || null,
       short_description: form.shortDescription.trim() || null,
       price: Number(form.price),
@@ -310,6 +316,14 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
         description: mode === "create" ? "Your catalog now includes this listing." : "Your storefront changes are live and ready for review.",
       });
 
+      if (resolvedSlug !== slugPreview) {
+        addToast({
+          type: "info",
+          title: "Slug adjusted for uniqueness",
+          description: `The listing URL was saved as ${resolvedSlug}.`,
+        });
+      }
+
       router.push("/vendor/products");
       router.refresh();
     } catch (error) {
@@ -371,6 +385,11 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
             <h2 className="mb-4 text-xs font-medium uppercase tracking-widest text-stone-400">Details</h2>
             <div className="space-y-4">
               <Input label="Product name" placeholder="Handcrafted leather weekender" value={form.name} onChange={(event) => updateField("name", event.target.value)} />
+              <div className="border border-dashed border-stone-200 px-4 py-3 text-sm text-stone-500 dark:border-stone-800">
+                <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Slug preview</p>
+                <p className="mt-2 font-medium text-stone-900 dark:text-white">{slugPreview}</p>
+                <p className="mt-1 text-xs text-stone-400">If that slug is already in use for this store, NexCart will append a numeric suffix automatically.</p>
+              </div>
               <div>
                 <label className="block text-xs font-medium uppercase tracking-widest text-stone-500 dark:text-stone-400">Description</label>
                 <textarea

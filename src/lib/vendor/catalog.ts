@@ -1,3 +1,4 @@
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { slugify } from "@/lib/utils/constants";
 import type { Product, ProductVariant } from "@/types";
 
@@ -86,4 +87,34 @@ export function buildDuplicateSlug(baseName: string, attempt = 0) {
     return `${baseSlug}-copy`;
   }
   return `${baseSlug}-copy-${attempt + 1}`;
+}
+
+export async function ensureUniqueProductSlug({
+  storeId,
+  baseName,
+  currentProductId,
+}: {
+  storeId: string;
+  baseName: string;
+  currentProductId?: string;
+}) {
+  const supabase = getSupabaseBrowserClient();
+  const baseSlug = slugify(baseName);
+
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    const candidate = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
+    let query = supabase.from("products").select("id").eq("store_id", storeId).eq("slug", candidate);
+
+    if (currentProductId) {
+      query = query.neq("id", currentProductId);
+    }
+
+    const { data } = await query.maybeSingle();
+
+    if (!data) {
+      return candidate;
+    }
+  }
+
+  return `${baseSlug}-${Date.now()}`;
 }
