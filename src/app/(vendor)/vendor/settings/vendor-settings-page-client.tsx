@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
-import { getPayoutState } from "@/lib/orders/payout-state";
+import { getPayoutAnomaly, getPayoutState } from "@/lib/orders/payout-state";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatPrice, slugify } from "@/lib/utils/constants";
 import { useUIStore } from "@/stores/ui-store";
@@ -30,6 +30,11 @@ interface StoreSettingsFormState {
   returnsPolicy: string;
   processingTime: string;
   policyHighlights: string;
+  reshipTemplate: string;
+  returnInitiatedTemplate: string;
+  returnApprovedTemplate: string;
+  returnTransitTemplate: string;
+  returnReceivedTemplate: string;
 }
 
 interface FinanceSnapshot {
@@ -41,7 +46,38 @@ interface FinanceSnapshot {
   latestOrderDate: string | null;
 }
 
+interface PayoutAuditSummary {
+  reconciledOrders: number;
+  outstandingSettlements: number;
+  anomalyCount: number;
+  averageReconcileDays: number;
+}
+
 type FinanceOrderSummary = Pick<Order, "id" | "order_number" | "status" | "total" | "platform_fee" | "created_at" | "delivered_at" | "stripe_transfer_id" | "stripe_transfer_status" | "payout_reconciled_at">;
+
+interface TemplateFieldProps {
+  label: string;
+  value: string;
+  helper: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+}
+
+function TemplateField({ label, value, helper, placeholder, onChange }: TemplateFieldProps) {
+  return (
+    <div>
+      <label className="block text-xs font-medium uppercase tracking-widest text-stone-500 dark:text-stone-400">{label}</label>
+      <textarea
+        rows={4}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1.5 w-full border-b border-stone-200 bg-transparent py-2 text-sm placeholder:text-stone-400 focus:border-stone-900 focus:outline-none dark:border-stone-700"
+        placeholder={placeholder}
+      />
+      <p className="mt-2 text-xs leading-relaxed text-stone-500">{helper}</p>
+    </div>
+  );
+}
 
 export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClientProps) {
   const { store, user, refreshProfile, isLoading: authLoading } = useAuth();
@@ -59,11 +95,17 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
     returnsPolicy: "",
     processingTime: "",
     policyHighlights: "",
+    reshipTemplate: "",
+    returnInitiatedTemplate: "",
+    returnApprovedTemplate: "",
+    returnTransitTemplate: "",
+    returnReceivedTemplate: "",
   });
   const [isSaving, setIsSaving] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
   const [isOpeningStripeDashboard, setIsOpeningStripeDashboard] = useState(false);
   const [financeSnapshot, setFinanceSnapshot] = useState<FinanceSnapshot | null>(null);
+  const [payoutAudit, setPayoutAudit] = useState<PayoutAuditSummary | null>(null);
   const [financeOrders, setFinanceOrders] = useState<FinanceOrderSummary[]>([]);
 
   useEffect(() => {
@@ -83,6 +125,11 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
       returnsPolicy: typeof settings.returnsPolicy === "string" ? settings.returnsPolicy : "",
       processingTime: typeof settings.processingTime === "string" ? settings.processingTime : "",
       policyHighlights: Array.isArray(settings.policyHighlights) ? settings.policyHighlights.filter((value): value is string => typeof value === "string").join(", ") : "",
+      reshipTemplate: typeof settings.reshipTemplate === "string" ? settings.reshipTemplate : "",
+      returnInitiatedTemplate: typeof settings.returnInitiatedTemplate === "string" ? settings.returnInitiatedTemplate : "",
+      returnApprovedTemplate: typeof settings.returnApprovedTemplate === "string" ? settings.returnApprovedTemplate : "",
+      returnTransitTemplate: typeof settings.returnTransitTemplate === "string" ? settings.returnTransitTemplate : "",
+      returnReceivedTemplate: typeof settings.returnReceivedTemplate === "string" ? settings.returnReceivedTemplate : "",
     });
   }, [store, user?.email]);
 
@@ -108,6 +155,8 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
     async function fetchFinanceSnapshot() {
       if (!store) {
         setFinanceSnapshot(null);
+        setPayoutAudit(null);
+        setFinanceOrders([]);
         return;
       }
 
@@ -124,6 +173,21 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
       const openOrders = orders.filter((order) => ["pending", "confirmed", "processing", "packed", "shipped", "out_for_delivery"].includes(order.status)).length;
       const settledOrders = orders.filter((order) => order.status === "delivered" || Boolean(order.stripe_transfer_id)).length;
       const latestOrderDate = orders.length > 0 ? orders.map((order) => order.created_at).sort().at(-1) ?? null : null;
+      const reconciledOrders = orders.filter((order) => Boolean(order.payout_reconciled_at)).length;
+      const outstandingSettlements = orders.filter((order) => order.status === "delivered" && order.stripe_transfer_status !== "paid").length;
+      const anomalyCount = orders.filter((order) =>
+        Boolean(getPayoutAnomaly(order.status, order.stripe_transfer_id, order.stripe_transfer_status, order.payout_reconciled_at))
+      ).length;
+      const reconciliationDurations = orders
+        .filter((order) => order.payout_reconciled_at)
+        .map((order) => {
+          const comparisonStart = order.delivered_at ?? order.created_at;
+          const createdAt = new Date(comparisonStart).getTime();
+          const reconciledAt = new Date(order.payout_reconciled_at as string).getTime();
+          return Number.isFinite(createdAt) && Number.isFinite(reconciledAt)
+            ? Math.max(0, Math.round((reconciledAt - createdAt) / (1000 * 60 * 60 * 24)))
+            : 0;
+        });
 
       setFinanceSnapshot({
         grossSales,
@@ -133,10 +197,19 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
         settledOrders,
         latestOrderDate,
       });
+      setPayoutAudit({
+        reconciledOrders,
+        outstandingSettlements,
+        anomalyCount,
+        averageReconcileDays:
+          reconciliationDurations.length > 0
+            ? Math.round(reconciliationDurations.reduce((sum, value) => sum + value, 0) / reconciliationDurations.length)
+            : 0,
+      });
       setFinanceOrders(
         [...orders]
           .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
-          .slice(0, 6)
+          .slice(0, 10)
       );
     }
 
@@ -210,6 +283,11 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
           craftsmanshipNote: form.craftsmanshipNote.trim() || null,
           returnsPolicy: form.returnsPolicy.trim() || null,
           processingTime: form.processingTime.trim() || null,
+          reshipTemplate: form.reshipTemplate.trim() || null,
+          returnInitiatedTemplate: form.returnInitiatedTemplate.trim() || null,
+          returnApprovedTemplate: form.returnApprovedTemplate.trim() || null,
+          returnTransitTemplate: form.returnTransitTemplate.trim() || null,
+          returnReceivedTemplate: form.returnReceivedTemplate.trim() || null,
           policyHighlights: form.policyHighlights
             .split(",")
             .map((value) => value.trim())
@@ -352,6 +430,50 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
               <Button type="submit" isLoading={isSaving}>Save store settings</Button>
             </div>
           </Card>
+
+          <Card>
+            <CardTitle>Recovery communication templates</CardTitle>
+            <CardDescription>
+              Create reusable buyer-facing messages for reshipments and return stages. Tokens like {"{orderNumber}"}, {"{trackingNumber}"}, and {"{supportEmail}"} are supported.
+            </CardDescription>
+            <div className="mt-6 grid gap-5">
+              <TemplateField
+                label="Reship update"
+                value={form.reshipTemplate}
+                onChange={(value) => updateField("reshipTemplate", value)}
+                helper="Used when a delivery fails and your team starts a retry shipment."
+                placeholder="We are arranging a replacement shipment for order {orderNumber}. Fresh tracking will follow shortly. Contact {supportEmail} if you need anything in the meantime."
+              />
+              <TemplateField
+                label="Return started"
+                value={form.returnInitiatedTemplate}
+                onChange={(value) => updateField("returnInitiatedTemplate", value)}
+                helper="Used when the buyer return flow first opens."
+                placeholder="We have started the return review for order {orderNumber}. Please keep the item ready while we confirm the next handoff details."
+              />
+              <TemplateField
+                label="Return approved"
+                value={form.returnApprovedTemplate}
+                onChange={(value) => updateField("returnApprovedTemplate", value)}
+                helper="Used after the return is approved and you want to explain next steps clearly."
+                placeholder="Your return for order {orderNumber} has been approved. Please follow the next return step from {storeName} or contact {supportEmail} for help."
+              />
+              <TemplateField
+                label="Return in transit"
+                value={form.returnTransitTemplate}
+                onChange={(value) => updateField("returnTransitTemplate", value)}
+                helper="Used while the return package is on the way back to your team."
+                placeholder="The return for order {orderNumber} is now in transit back to {storeName}. We will update this page as soon as the parcel is received."
+              />
+              <TemplateField
+                label="Return received"
+                value={form.returnReceivedTemplate}
+                onChange={(value) => updateField("returnReceivedTemplate", value)}
+                helper="Used once the returned item reaches your team and the final resolution is underway."
+                placeholder="We have received the returned parcel for order {orderNumber} and are now completing the final resolution."
+              />
+            </div>
+          </Card>
         </form>
 
         <div className="space-y-6">
@@ -484,6 +606,118 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
                           </span>
                         </div>
                         <p className="mt-2 text-xs leading-relaxed text-stone-500">{payoutState.description}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </Card>
+
+          <Card>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Finance controls</p>
+                <h2 className="mt-2 font-serif text-2xl text-stone-900 dark:text-white">Payout audit history</h2>
+                <p className="mt-2 text-sm text-stone-500">Review reconciliation timestamps, settlement gaps, and orders that still need finance attention.</p>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300">
+                <Wallet className="h-5 w-5" />
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div className="border border-stone-200 p-4 dark:border-stone-800">
+                <p className="text-xs uppercase tracking-widest text-stone-400">Reconciled orders</p>
+                <p className="mt-2 text-xl font-medium text-stone-900 dark:text-white">{payoutAudit?.reconciledOrders ?? 0}</p>
+              </div>
+              <div className="border border-stone-200 p-4 dark:border-stone-800">
+                <p className="text-xs uppercase tracking-widest text-stone-400">Outstanding settlement</p>
+                <p className="mt-2 text-xl font-medium text-amber-700 dark:text-amber-300">{payoutAudit?.outstandingSettlements ?? 0}</p>
+              </div>
+              <div className="border border-stone-200 p-4 dark:border-stone-800">
+                <p className="text-xs uppercase tracking-widest text-stone-400">Audit alerts</p>
+                <p className="mt-2 text-xl font-medium text-rose-600 dark:text-rose-300">{payoutAudit?.anomalyCount ?? 0}</p>
+              </div>
+              <div className="border border-stone-200 p-4 dark:border-stone-800">
+                <p className="text-xs uppercase tracking-widest text-stone-400">Avg. reconcile time</p>
+                <p className="mt-2 text-xl font-medium text-stone-900 dark:text-white">
+                  {payoutAudit?.averageReconcileDays ? `${payoutAudit.averageReconcileDays}d` : "N/A"}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 border-t border-stone-100 pt-5 dark:border-stone-800">
+              <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Recent audit trail</p>
+              {financeOrders.length === 0 ? (
+                <p className="mt-3 text-sm text-stone-500">Audit records will appear here once payouts and reconciliation events start flowing through the marketplace.</p>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  {financeOrders.map((order) => {
+                    const payoutState = getPayoutState(order.status, order.stripe_transfer_id, order.stripe_transfer_status);
+                    const anomaly = getPayoutAnomaly(
+                      order.status,
+                      order.stripe_transfer_id,
+                      order.stripe_transfer_status,
+                      order.payout_reconciled_at
+                    );
+
+                    return (
+                      <div key={order.id} className="border border-stone-200 p-3 text-sm dark:border-stone-800">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-medium text-stone-900 dark:text-white">{order.order_number}</p>
+                            <p className="mt-1 text-xs text-stone-500">
+                              Logged {new Date(order.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <span
+                              className={`inline-flex px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${
+                                anomaly
+                                  ? anomaly.tone === "danger"
+                                    ? "bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300"
+                                    : anomaly.tone === "warning"
+                                      ? "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
+                                      : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400"
+                                  : "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300"
+                              }`}
+                            >
+                              {anomaly?.label ?? "Audit clear"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="mt-3 grid gap-2 text-xs text-stone-500 sm:grid-cols-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <span>Payout state</span>
+                            <span className="font-medium text-stone-900 dark:text-white">{payoutState.label}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span>Transfer state</span>
+                            <span className="font-medium text-stone-900 dark:text-white">
+                              {order.stripe_transfer_status ? order.stripe_transfer_status.replaceAll("_", " ") : "Awaiting Stripe update"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span>Net payout</span>
+                            <span className="font-medium text-stone-900 dark:text-white">{formatPrice(Number(order.total) - Number(order.platform_fee))}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span>Reconciled</span>
+                            <span className="font-medium text-stone-900 dark:text-white">
+                              {order.payout_reconciled_at
+                                ? new Date(order.payout_reconciled_at).toLocaleString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                    hour: "numeric",
+                                    minute: "2-digit",
+                                  })
+                                : "Pending"}
+                            </span>
+                          </div>
+                        </div>
+                        {anomaly ? <p className="mt-2 text-xs leading-relaxed text-stone-500">{anomaly.description}</p> : null}
                       </div>
                     );
                   })}

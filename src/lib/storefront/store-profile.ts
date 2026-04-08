@@ -8,6 +8,11 @@ export interface StoreProfileContent {
   returnsPolicy: string | null;
   processingTime: string | null;
   policyHighlights: string[];
+  reshipTemplate: string | null;
+  returnInitiatedTemplate: string | null;
+  returnApprovedTemplate: string | null;
+  returnTransitTemplate: string | null;
+  returnReceivedTemplate: string | null;
 }
 
 export interface StoreTrustBadge {
@@ -35,6 +40,11 @@ export function getStoreProfileContent(store: Pick<Store, "settings">): StorePro
       .filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
       .map((value) => value.trim())
       .slice(0, 4),
+    reshipTemplate: readSetting(settings, "reshipTemplate"),
+    returnInitiatedTemplate: readSetting(settings, "returnInitiatedTemplate"),
+    returnApprovedTemplate: readSetting(settings, "returnApprovedTemplate"),
+    returnTransitTemplate: readSetting(settings, "returnTransitTemplate"),
+    returnReceivedTemplate: readSetting(settings, "returnReceivedTemplate"),
   };
 }
 

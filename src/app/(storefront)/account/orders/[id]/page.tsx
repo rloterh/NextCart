@@ -8,6 +8,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Mail, MapPin, Truck } from "lucide-react";
 import { Card, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
+import { renderOrderCommunicationTemplate } from "@/lib/orders/communication-templates";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatDate, formatPrice } from "@/lib/utils/constants";
 import { orderStatusCopy } from "@/lib/orders/status-copy";
@@ -92,10 +93,38 @@ export default function BuyerOrderDetailPage() {
     );
   }
 
-  const currentStep = statusSteps.indexOf(order.status as (typeof statusSteps)[number]);
+  const progressStatus =
+    order.status === "delivery_failed" || order.status === "reshipping"
+      ? "out_for_delivery"
+      : order.status === "return_initiated" ||
+          order.status === "return_approved" ||
+          order.status === "return_in_transit" ||
+          order.status === "return_received"
+        ? "delivered"
+        : order.status;
+  const currentStep = statusSteps.indexOf(progressStatus as (typeof statusSteps)[number]);
   const address = order.shipping_address as CheckoutShippingAddress | null;
   const storeProfile = order.store ? getStoreProfileContent(order.store) : null;
   const statusContent = orderStatusCopy[order.status];
+  const communicationStatus =
+    order.status === "reshipping" ||
+    order.status === "return_initiated" ||
+    order.status === "return_approved" ||
+    order.status === "return_in_transit" ||
+    order.status === "return_received"
+      ? order.status
+      : null;
+  const resolutionTemplate = communicationStatus
+    ? renderOrderCommunicationTemplate(communicationStatus, storeProfile, {
+        orderNumber: order.order_number,
+        storeName: order.store?.name ?? null,
+        supportEmail: storeProfile?.supportEmail,
+        trackingNumber: order.tracking_number,
+        trackingUrl: order.tracking_url,
+        returnsPolicy: storeProfile?.returnsPolicy,
+        processingTime: storeProfile?.processingTime,
+      })
+    : null;
   const timeline = [
     { key: "pending", label: "Order placed", reached: true, timestamp: order.created_at, description: "Checkout completed and payment entered the marketplace workflow." },
     { key: "confirmed", label: "Confirmed", reached: order.status !== "pending", timestamp: null, description: "Payment and order details were confirmed for vendor handling." },
@@ -279,7 +308,14 @@ export default function BuyerOrderDetailPage() {
         </Card>
       ) : null}
 
-      {order.status === "delivery_failed" || order.status === "reshipping" || order.status === "return_initiated" || order.status === "return_approved" || order.status === "return_in_transit" || order.status === "return_received" ? (
+      {resolutionTemplate ? (
+        <Card>
+          <CardTitle>Resolution update</CardTitle>
+          <p className="mt-3 text-sm leading-relaxed text-stone-500">{resolutionTemplate}</p>
+        </Card>
+      ) : null}
+
+      {!resolutionTemplate && (order.status === "delivery_failed" || order.status === "reshipping" || order.status === "return_initiated" || order.status === "return_approved" || order.status === "return_in_transit" || order.status === "return_received") ? (
         <Card>
           <CardTitle>Resolution update</CardTitle>
           <p className="mt-3 text-sm leading-relaxed text-stone-500">

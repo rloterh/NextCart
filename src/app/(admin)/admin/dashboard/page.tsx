@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { AlertTriangle, DollarSign, Package, ShieldAlert, ShoppingCart, Store, TrendingUp, Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -152,8 +153,16 @@ export default function AdminDashboard() {
               <h2 className="mt-2 font-serif text-2xl text-stone-900 dark:text-white">Operational risk queue</h2>
               <p className="mt-2 text-sm text-stone-500">These stores currently show exception or payout signals worth review.</p>
             </div>
-            <div className="rounded-full bg-rose-50 p-3 text-rose-600 dark:bg-rose-900/20 dark:text-rose-300">
-              <ShieldAlert className="h-5 w-5" />
+            <div className="flex items-center gap-3">
+              <Link
+                href="/admin/orders"
+                className="text-xs font-medium uppercase tracking-wider text-rose-700 transition-colors hover:text-rose-900 dark:text-rose-300 dark:hover:text-rose-100"
+              >
+                Review orders
+              </Link>
+              <div className="rounded-full bg-rose-50 p-3 text-rose-600 dark:bg-rose-900/20 dark:text-rose-300">
+                <ShieldAlert className="h-5 w-5" />
+              </div>
             </div>
           </div>
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Store, Users, Package, Shield, ArrowLeft } from "lucide-react";
+import { LayoutDashboard, Store, Users, Package, Shield, ArrowLeft, ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 const adminNav = [
@@ -10,6 +10,7 @@ const adminNav = [
   { label: "Vendors", href: "/admin/vendors", icon: Store },
   { label: "Users", href: "/admin/users", icon: Users },
   { label: "Products", href: "/admin/products", icon: Package },
+  { label: "Orders", href: "/admin/orders", icon: ClipboardList },
 ];
 
 export function AdminSidebar() {

@@ -5,11 +5,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, CheckCircle2, Mail, MapPin, Package, PencilLine, Truck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Copy, Mail, MapPin, Package, PencilLine, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
+import { renderOrderCommunicationTemplate } from "@/lib/orders/communication-templates";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatDate, formatPrice } from "@/lib/utils/constants";
 import { orderStatusCopy } from "@/lib/orders/status-copy";
@@ -189,6 +190,23 @@ export default function VendorOrderDetailPage() {
     setUpdating(false);
   }
 
+  async function copyCustomerUpdate(template: string) {
+    try {
+      await navigator.clipboard.writeText(template);
+      addToast({
+        type: "success",
+        title: "Buyer update copied",
+        description: "The current recovery message is ready to paste into your support workflow.",
+      });
+    } catch {
+      addToast({
+        type: "error",
+        title: "Copy failed",
+        description: "Clipboard access was not available in this browser.",
+      });
+    }
+  }
+
   if (authLoading || loading) {
     return (
       <div className="mx-auto max-w-3xl space-y-6">
@@ -237,6 +255,25 @@ export default function VendorOrderDetailPage() {
   const canMarkReturnReceived = order.status === "return_in_transit";
   const storeProfile = order.store ? getStoreProfileContent(order.store) : null;
   const statusContent = orderStatusCopy[order.status];
+  const communicationStatus =
+    order.status === "reshipping" ||
+    order.status === "return_initiated" ||
+    order.status === "return_approved" ||
+    order.status === "return_in_transit" ||
+    order.status === "return_received"
+      ? order.status
+      : null;
+  const customerUpdate = communicationStatus
+    ? renderOrderCommunicationTemplate(communicationStatus, storeProfile, {
+        orderNumber: order.order_number,
+        storeName: order.store?.name ?? store?.name ?? null,
+        supportEmail: storeProfile?.supportEmail ?? null,
+        trackingNumber: tracking || order.tracking_number,
+        trackingUrl: trackingUrl || order.tracking_url,
+        returnsPolicy: storeProfile?.returnsPolicy,
+        processingTime: storeProfile?.processingTime,
+      })
+    : null;
   const timeline = [
     { label: "Order placed", timestamp: order.created_at, reached: true, description: "The buyer completed checkout and the order entered your queue." },
     { label: "Confirmed", timestamp: null, reached: order.status !== "pending", description: "Payment and order details were confirmed for vendor handling." },
@@ -424,6 +461,31 @@ export default function VendorOrderDetailPage() {
           </div>
         </Card>
       </div>
+
+      {customerUpdate ? (
+        <Card>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle>Buyer update template</CardTitle>
+              <p className="mt-2 text-sm text-stone-500">
+                This suggested message pulls from your saved recovery templates and live order context so the buyer hears a consistent update.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              leftIcon={<Copy className="h-3.5 w-3.5" />}
+              onClick={() => void copyCustomerUpdate(customerUpdate)}
+            >
+              Copy
+            </Button>
+          </div>
+          <div className="mt-4 border border-stone-200 bg-stone-50/80 p-4 text-sm leading-relaxed text-stone-700 dark:border-stone-800 dark:bg-stone-950/30 dark:text-stone-300">
+            {customerUpdate}
+          </div>
+        </Card>
+      ) : null}
 
       <Card>
         <div className="flex items-center gap-2">
