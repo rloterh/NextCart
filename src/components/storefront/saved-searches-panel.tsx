@@ -10,22 +10,69 @@ interface SavedSearchesPanelProps {
   currentSearch: string;
   currentCategory: string;
   currentSort: string;
+  currentStore?: string;
+  currentStoreName?: string;
+  currentMinPrice?: string;
+  currentMaxPrice?: string;
+  currentRating?: string;
+  featuredOnly?: boolean;
+  inStockOnly?: boolean;
 }
 
-export function SavedSearchesPanel({ currentSearch, currentCategory, currentSort }: SavedSearchesPanelProps) {
+export function SavedSearchesPanel({
+  currentSearch,
+  currentCategory,
+  currentSort,
+  currentStore = "",
+  currentStoreName = "",
+  currentMinPrice = "",
+  currentMaxPrice = "",
+  currentRating = "",
+  featuredOnly = false,
+  inStockOnly = false,
+}: SavedSearchesPanelProps) {
   const router = useRouter();
   const addToast = useUIStore((state) => state.addToast);
   const savedSearches = useDiscoveryStore((state) => state.savedSearches);
   const saveSearch = useDiscoveryStore((state) => state.saveSearch);
   const removeSavedSearch = useDiscoveryStore((state) => state.removeSavedSearch);
 
-  const canSave = useMemo(() => Boolean(currentSearch || currentCategory), [currentCategory, currentSearch]);
+  const canSave = useMemo(
+    () =>
+      Boolean(
+        currentSearch ||
+          currentCategory ||
+          currentStore ||
+          currentMinPrice ||
+          currentMaxPrice ||
+          currentRating ||
+          featuredOnly ||
+          inStockOnly
+      ),
+    [currentCategory, currentMaxPrice, currentMinPrice, currentRating, currentSearch, currentStore, featuredOnly, inStockOnly]
+  );
 
-  function buildHref(search: { q: string; category: string; sort: string }) {
+  function buildHref(search: {
+    q: string;
+    category: string;
+    sort: string;
+    store?: string;
+    minPrice?: string;
+    maxPrice?: string;
+    rating?: string;
+    featured?: boolean;
+    inStock?: boolean;
+  }) {
     const params = new URLSearchParams();
     if (search.q) params.set("q", search.q);
     if (search.category) params.set("category", search.category);
     if (search.sort && search.sort !== "newest") params.set("sort", search.sort);
+    if (search.store) params.set("store", search.store);
+    if (search.minPrice) params.set("minPrice", search.minPrice);
+    if (search.maxPrice) params.set("maxPrice", search.maxPrice);
+    if (search.rating) params.set("rating", search.rating);
+    if (search.featured) params.set("featured", "1");
+    if (search.inStock) params.set("inStock", "1");
     return `/shop?${params.toString()}`;
   }
 
@@ -39,8 +86,26 @@ export function SavedSearchesPanel({ currentSearch, currentCategory, currentSort
       return;
     }
 
-    const label = currentSearch || currentCategory || "Saved search";
-    saveSearch({ label, q: currentSearch, category: currentCategory, sort: currentSort });
+    const label =
+      currentSearch ||
+      currentCategory ||
+      currentStoreName ||
+      (featuredOnly ? "Featured picks" : "") ||
+      (inStockOnly ? "In-stock finds" : "") ||
+      (currentRating ? `${currentRating}+ stars` : "") ||
+      "Saved search";
+    saveSearch({
+      label,
+      q: currentSearch,
+      category: currentCategory,
+      sort: currentSort,
+      store: currentStore,
+      minPrice: currentMinPrice,
+      maxPrice: currentMaxPrice,
+      rating: currentRating,
+      featured: featuredOnly,
+      inStock: inStockOnly,
+    });
     addToast({
       type: "success",
       title: "Search saved",
@@ -83,7 +148,18 @@ export function SavedSearchesPanel({ currentSearch, currentCategory, currentSort
                   <span className="truncate">{item.label}</span>
                 </div>
                 <p className="mt-1 text-xs text-stone-500">
-                  {[item.q && `Query: ${item.q}`, item.category && `Category: ${item.category}`, item.sort !== "newest" && `Sort: ${item.sort}`]
+                  {[
+                    item.q && `Query: ${item.q}`,
+                    item.category && `Category: ${item.category}`,
+                    item.store && "Vendor focus",
+                    item.minPrice || item.maxPrice
+                      ? `Price: ${item.minPrice ? `$${item.minPrice}` : "Any"}-${item.maxPrice ? `$${item.maxPrice}` : "Up"}`
+                      : "",
+                    item.rating && `${item.rating}+ stars`,
+                    item.featured && "Featured only",
+                    item.inStock && "In stock",
+                    item.sort !== "newest" && `Sort: ${item.sort}`,
+                  ]
                     .filter(Boolean)
                     .join(" / ")}
                 </p>

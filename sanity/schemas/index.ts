@@ -40,6 +40,40 @@ export const homepageSchema = {
       type: "array",
       of: [{ type: "reference", to: [{ type: "category" }] }],
     },
+    {
+      name: "editorialCollections",
+      title: "Editorial Collections",
+      type: "array",
+      of: [
+        {
+          type: "object",
+          fields: [
+            { name: "eyebrow", title: "Eyebrow", type: "string" },
+            { name: "title", title: "Title", type: "string", validation: (r: any) => r.required() },
+            { name: "subtitle", title: "Subtitle", type: "text", rows: 2 },
+            { name: "ctaLabel", title: "CTA Label", type: "string" },
+            { name: "ctaHref", title: "CTA Link", type: "string" },
+            {
+              name: "collectionType",
+              title: "Collection Type",
+              type: "string",
+              initialValue: "featured",
+              options: {
+                list: [
+                  { title: "Featured", value: "featured" },
+                  { title: "Popular", value: "popular" },
+                  { title: "Newest", value: "newest" },
+                  { title: "Category", value: "category" },
+                ],
+              },
+            },
+            { name: "categorySlug", title: "Category Slug", type: "string" },
+            { name: "featuredOnly", title: "Featured Only", type: "boolean", initialValue: false },
+            { name: "limit", title: "Product Limit", type: "number", initialValue: 4 },
+          ],
+        },
+      ],
+    },
   ],
 };
 

@@ -26,7 +26,19 @@ export const HOMEPAGE_QUERY = `*[_type == "homepage"][0]{
     _id, title, subtitle, image, link, isActive
   },
   featuredCategories[]->{
-    _id, title, slug, image
+    _id, title, slug, image, description
+  },
+  editorialCollections[]{
+    _key,
+    eyebrow,
+    title,
+    subtitle,
+    ctaLabel,
+    ctaHref,
+    collectionType,
+    categorySlug,
+    featuredOnly,
+    limit
   }
 }`;
 
