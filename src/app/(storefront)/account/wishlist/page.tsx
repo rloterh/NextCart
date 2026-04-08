@@ -19,13 +19,18 @@ type WishlistRecord = WishlistItem & {
 };
 
 export default function WishlistPage() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const ensureLoaded = useWishlistStore((state) => state.ensureLoaded);
+  const savedProductIds = useWishlistStore((state) => state.productIds);
   const [items, setItems] = useState<WishlistRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchWishlist() {
+      if (authLoading) {
+        return;
+      }
+
       if (!user) {
         setItems([]);
         setLoading(false);
@@ -37,6 +42,7 @@ export default function WishlistPage() {
       const { data } = await supabase
         .from("wishlists")
         .select("id, user_id, product_id, created_at, product:products(*, store:stores(id, name, slug, logo_url, rating_avg), category:categories(id, name, slug))")
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
       setItems((data ?? []) as WishlistRecord[]);
@@ -45,11 +51,12 @@ export default function WishlistPage() {
     }
 
     void fetchWishlist();
-  }, [ensureLoaded, user]);
+  }, [authLoading, ensureLoaded, user]);
 
   const products = items
     .map((item) => item.product)
-    .filter((product): product is WishlistProduct => Boolean(product));
+    .filter((product): product is WishlistProduct => Boolean(product))
+    .filter((product) => savedProductIds.includes(product.id));
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-7xl px-6 py-8">

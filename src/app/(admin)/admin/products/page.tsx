@@ -36,6 +36,7 @@ export default function AdminProductsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<ProductStatus | "all">("all");
   const [search, setSearch] = useState("");
+  const [activeProductId, setActiveProductId] = useState<string | null>(null);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -58,11 +59,13 @@ export default function AdminProductsPage() {
   }, [fetchProducts]);
 
   async function updateProduct(productId: string, changes: Partial<Pick<Product, "status" | "is_featured">>) {
+    setActiveProductId(productId);
     const supabase = getSupabaseBrowserClient();
     const { error } = await supabase.from("products").update(changes).eq("id", productId);
 
     if (error) {
       addToast({ type: "error", title: "Moderation update failed", description: error.message });
+      setActiveProductId(null);
       return;
     }
 
@@ -72,6 +75,7 @@ export default function AdminProductsPage() {
       description: "Marketplace visibility rules were applied successfully.",
     });
     await fetchProducts();
+    setActiveProductId(null);
   }
 
   const stats = useMemo(
@@ -164,7 +168,7 @@ export default function AdminProductsPage() {
                     <div>
                       <p className="text-sm font-medium text-stone-900 dark:text-white">{product.name}</p>
                       <p className="mt-1 text-[10px] uppercase tracking-wider text-stone-400">
-                        {product.category?.name ?? "Uncategorized"} • {formatPrice(Number(product.price))}
+                        {product.category?.name ?? "Uncategorized"} / {formatPrice(Number(product.price))}
                       </p>
                     </div>
                   </td>
@@ -196,19 +200,19 @@ export default function AdminProductsPage() {
                       <Link href={`/products/${product.store_id}/${product.slug}`} target="_blank" rel="noreferrer">
                         <Button size="sm" variant="ghost" leftIcon={<Eye className="h-3.5 w-3.5" />}>View</Button>
                       </Link>
-                      <Button size="sm" variant="ghost" leftIcon={<Sparkles className="h-3.5 w-3.5" />} onClick={() => void updateProduct(product.id, { is_featured: !product.is_featured })}>
+                      <Button size="sm" variant="ghost" isLoading={activeProductId === product.id} disabled={activeProductId === product.id} leftIcon={<Sparkles className="h-3.5 w-3.5" />} onClick={() => void updateProduct(product.id, { is_featured: !product.is_featured })}>
                         {product.is_featured ? "Unfeature" : "Feature"}
                       </Button>
                       {product.status === "paused" ? (
-                        <Button size="sm" variant="ghost" leftIcon={<PlayCircle className="h-3.5 w-3.5 text-emerald-600" />} onClick={() => void updateProduct(product.id, { status: "active" })}>
+                        <Button size="sm" variant="ghost" isLoading={activeProductId === product.id} disabled={activeProductId === product.id} leftIcon={<PlayCircle className="h-3.5 w-3.5 text-emerald-600" />} onClick={() => void updateProduct(product.id, { status: "active" })}>
                           Activate
                         </Button>
                       ) : (
-                        <Button size="sm" variant="ghost" leftIcon={<PauseCircle className="h-3.5 w-3.5 text-amber-600" />} onClick={() => void updateProduct(product.id, { status: "paused" })}>
+                        <Button size="sm" variant="ghost" isLoading={activeProductId === product.id} disabled={activeProductId === product.id} leftIcon={<PauseCircle className="h-3.5 w-3.5 text-amber-600" />} onClick={() => void updateProduct(product.id, { status: "paused" })}>
                           Pause
                         </Button>
                       )}
-                      <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-300" leftIcon={<Archive className="h-3.5 w-3.5" />} onClick={() => void updateProduct(product.id, { status: "archived" })}>
+                      <Button size="sm" variant="ghost" isLoading={activeProductId === product.id} disabled={activeProductId === product.id} className="text-red-600 dark:text-red-300" leftIcon={<Archive className="h-3.5 w-3.5" />} onClick={() => void updateProduct(product.id, { status: "archived" })}>
                         Archive
                       </Button>
                     </div>

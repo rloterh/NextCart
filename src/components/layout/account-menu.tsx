@@ -7,11 +7,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, Heart, LayoutDashboard, LogOut, Settings, ShoppingBag, User } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useUIStore } from "@/stores/ui-store";
+import { useWishlistStore } from "@/stores/wishlist-store";
 import { cn } from "@/lib/utils/cn";
 
 export function AccountMenu() {
   const router = useRouter();
   const addToast = useUIStore((s) => s.addToast);
+  const resetWishlist = useWishlistStore((state) => state.reset);
   const { profile, isVendor, isAdmin, signOut, isLoading } = useAuth();
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -38,12 +40,22 @@ export function AccountMenu() {
 
   async function handleSignOut() {
     setSigningOut(true);
-    await signOut();
-    addToast({ type: "success", title: "Signed out successfully" });
-    setOpen(false);
-    router.push("/");
-    router.refresh();
-    setSigningOut(false);
+    try {
+      await signOut();
+      resetWishlist();
+      addToast({ type: "success", title: "Signed out successfully" });
+      setOpen(false);
+      router.push("/");
+      router.refresh();
+    } catch (error) {
+      addToast({
+        type: "error",
+        title: "Unable to sign out",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setSigningOut(false);
+    }
   }
 
   const firstName = profile?.full_name?.split(" ")[0] ?? "Account";

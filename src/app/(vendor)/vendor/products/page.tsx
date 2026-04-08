@@ -33,7 +33,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function VendorProductsPage() {
-  const { store } = useAuth();
+  const { store, isLoading: authLoading } = useAuth();
   const addToast = useUIStore((state) => state.addToast);
   const [products, setProducts] = useState<VendorProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,6 +62,21 @@ export default function VendorProductsPage() {
   useEffect(() => {
     void fetchProducts();
   }, [fetchProducts]);
+
+  if (authLoading) {
+    return <div className="h-96 animate-pulse bg-stone-100 dark:bg-stone-800" />;
+  }
+
+  if (!store) {
+    return (
+      <div className="border border-dashed border-stone-200 bg-white p-10 text-center dark:border-stone-800 dark:bg-stone-900">
+        <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Store access unavailable</h1>
+        <p className="mt-3 text-sm text-stone-500">
+          A vendor store record is required before you can manage catalog listings.
+        </p>
+      </div>
+    );
+  }
 
   async function updateProductStatus(productId: string, nextStatus: ProductStatus) {
     const supabase = getSupabaseBrowserClient();
@@ -169,7 +184,7 @@ export default function VendorProductsPage() {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-stone-900 dark:text-white">{product.name}</p>
-                        <p className="text-[10px] text-stone-400">SKU: {product.sku || "—"}</p>
+                        <p className="text-[10px] text-stone-400">SKU: {product.sku || "-"}</p>
                       </div>
                     </div>
                   </td>
@@ -179,7 +194,7 @@ export default function VendorProductsPage() {
                       {product.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-stone-500">{product.category?.name ?? "—"}</td>
+                  <td className="px-4 py-3 text-sm text-stone-500">{product.category?.name ?? "-"}</td>
                   <td className="px-4 py-3 text-right text-sm font-medium text-stone-900 dark:text-white">{formatPrice(Number(product.price))}</td>
                   <td className="px-4 py-3 text-right text-sm text-stone-500">{product.stock_quantity}</td>
                   <td className="px-4 py-3 text-right text-sm text-stone-500">{product.sale_count}</td>

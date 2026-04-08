@@ -14,16 +14,22 @@ interface AccountStats {
 }
 
 export default function AccountOverviewPage() {
-  const { profile, isVendor, isAdmin } = useAuth();
+  const { profile, user, isVendor, isAdmin, isLoading } = useAuth();
   const [stats, setStats] = useState<AccountStats>({ orders: 0, wishlist: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchStats() {
+      if (!user) {
+        setStats({ orders: 0, wishlist: 0 });
+        setLoading(false);
+        return;
+      }
+
       const sb = getSupabaseBrowserClient();
       const [ordersRes, wishlistRes] = await Promise.all([
-        sb.from("orders").select("id", { count: "exact", head: true }),
-        sb.from("wishlists").select("id", { count: "exact", head: true }),
+        sb.from("orders").select("id", { count: "exact", head: true }).eq("buyer_id", user.id),
+        sb.from("wishlists").select("id", { count: "exact", head: true }).eq("user_id", user.id),
       ]);
 
       setStats({
@@ -33,8 +39,10 @@ export default function AccountOverviewPage() {
       setLoading(false);
     }
 
-    fetchStats();
-  }, []);
+    if (!isLoading) {
+      void fetchStats();
+    }
+  }, [isLoading, user]);
 
   const quickLinks = [
     {
@@ -71,6 +79,22 @@ export default function AccountOverviewPage() {
       icon: User,
       meta: "Marketplace ops",
     });
+  }
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-6xl px-6 py-10">
+        <div className="h-28 animate-pulse bg-stone-100 dark:bg-stone-800" />
+        <div className="mt-8 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="grid gap-6 md:grid-cols-2">
+            {Array.from({ length: 2 }).map((_, index) => (
+              <div key={index} className="h-64 animate-pulse bg-stone-100 dark:bg-stone-800" />
+            ))}
+          </div>
+          <div className="h-72 animate-pulse bg-stone-100 dark:bg-stone-800" />
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -34,6 +34,7 @@ export default function AdminVendorsPage() {
   const [stores, setStores] = useState<StoreRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<VendorStatus | "all">("pending");
+  const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
 
   const fetchStores = useCallback(async () => {
     setLoading(true);
@@ -55,10 +56,13 @@ export default function AdminVendorsPage() {
   }, [fetchStores]);
 
   async function updateStatus(storeId: string, status: VendorStatus) {
+    setActiveStoreId(storeId);
     const supabase = getSupabaseBrowserClient();
     const { error } = await supabase.from("stores").update({ status }).eq("id", storeId);
+
     if (error) {
       addToast({ type: "error", title: "Failed", description: error.message });
+      setActiveStoreId(null);
       return;
     }
 
@@ -71,18 +75,29 @@ export default function AdminVendorsPage() {
 
     addToast({ type: "success", title: `Vendor ${status}` });
     await fetchStores();
+    setActiveStoreId(null);
   }
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       <div>
         <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Vendor management</h1>
-        <p className="mt-1 text-sm text-stone-500">Review applications, inspect storefront readiness, and manage vendor account access.</p>
+        <p className="mt-1 text-sm text-stone-500">
+          Review applications, inspect storefront readiness, and manage vendor account access.
+        </p>
       </div>
 
       <div className="flex items-center gap-1">
         {statusTabs.map((tab) => (
-          <button key={tab.value} onClick={() => setFilter(tab.value)} className={`px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-colors ${filter === tab.value ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900" : "text-stone-500 hover:text-stone-900 dark:hover:text-white"}`}>
+          <button
+            key={tab.value}
+            onClick={() => setFilter(tab.value)}
+            className={`px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-colors ${
+              filter === tab.value
+                ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900"
+                : "text-stone-500 hover:text-stone-900 dark:hover:text-white"
+            }`}
+          >
             {tab.label}
           </button>
         ))}
@@ -122,7 +137,9 @@ export default function AdminVendorsPage() {
                 <tr key={store.id} className="border-b border-stone-50 hover:bg-stone-50/50 dark:border-stone-800/50 dark:hover:bg-stone-800/20">
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center bg-stone-900 text-xs font-bold text-white">{store.name[0]}</div>
+                      <div className="flex h-9 w-9 items-center justify-center bg-stone-900 text-xs font-bold text-white">
+                        {store.name[0]}
+                      </div>
                       <div>
                         <p className="text-sm font-medium text-stone-900 dark:text-white">{store.name}</p>
                         <p className="text-[10px] text-stone-400">/{store.slug}</p>
@@ -130,7 +147,7 @@ export default function AdminVendorsPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3.5">
-                    <p className="text-sm text-stone-900 dark:text-white">{store.owner?.full_name ?? "—"}</p>
+                    <p className="text-sm text-stone-900 dark:text-white">{store.owner?.full_name ?? "-"}</p>
                     <p className="text-[10px] text-stone-400">{store.owner?.email}</p>
                   </td>
                   <td className="px-4 py-3.5">
@@ -151,15 +168,15 @@ export default function AdminVendorsPage() {
                       </Link>
                       {store.status === "pending" && (
                         <>
-                          <Button size="sm" variant="ghost" onClick={() => updateStatus(store.id, "approved")} leftIcon={<CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}>Approve</Button>
-                          <Button size="sm" variant="ghost" onClick={() => updateStatus(store.id, "rejected")} leftIcon={<XCircle className="h-3.5 w-3.5 text-red-500" />}>Reject</Button>
+                          <Button size="sm" variant="ghost" isLoading={activeStoreId === store.id} disabled={activeStoreId === store.id} onClick={() => updateStatus(store.id, "approved")} leftIcon={<CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}>Approve</Button>
+                          <Button size="sm" variant="ghost" isLoading={activeStoreId === store.id} disabled={activeStoreId === store.id} onClick={() => updateStatus(store.id, "rejected")} leftIcon={<XCircle className="h-3.5 w-3.5 text-red-500" />}>Reject</Button>
                         </>
                       )}
                       {store.status === "approved" && (
-                        <Button size="sm" variant="ghost" onClick={() => updateStatus(store.id, "suspended")} className="text-red-500">Suspend</Button>
+                        <Button size="sm" variant="ghost" isLoading={activeStoreId === store.id} disabled={activeStoreId === store.id} onClick={() => updateStatus(store.id, "suspended")} className="text-red-500">Suspend</Button>
                       )}
                       {store.status === "suspended" && (
-                        <Button size="sm" variant="ghost" onClick={() => updateStatus(store.id, "approved")} className="text-emerald-600">Reinstate</Button>
+                        <Button size="sm" variant="ghost" isLoading={activeStoreId === store.id} disabled={activeStoreId === store.id} onClick={() => updateStatus(store.id, "approved")} className="text-emerald-600">Reinstate</Button>
                       )}
                     </div>
                   </td>

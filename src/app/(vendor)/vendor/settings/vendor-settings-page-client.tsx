@@ -8,6 +8,7 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { slugify } from "@/lib/utils/constants";
 import { useUIStore } from "@/stores/ui-store";
 
 interface VendorSettingsPageClientProps {
@@ -25,7 +26,7 @@ interface StoreSettingsFormState {
 }
 
 export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClientProps) {
-  const { store, user, refreshProfile } = useAuth();
+  const { store, user, refreshProfile, isLoading: authLoading } = useAuth();
   const addToast = useUIStore((state) => state.addToast);
   const [form, setForm] = useState<StoreSettingsFormState>({
     name: "",
@@ -103,20 +104,39 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
 
     if (!store) return;
 
+    if (!form.name.trim()) {
+      addToast({
+        type: "error",
+        title: "Store name is required",
+        description: "Add a store name before saving brand settings.",
+      });
+      return;
+    }
+
+    if (form.supportEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.supportEmail)) {
+      addToast({
+        type: "error",
+        title: "Support email is invalid",
+        description: "Enter a valid support email so buyers know how to reach your team.",
+      });
+      return;
+    }
+
     setIsSaving(true);
     const supabase = getSupabaseBrowserClient();
+    const normalizedSlug = slugify(form.slug || form.name);
     const { error } = await supabase
       .from("stores")
       .update({
-        name: form.name,
-        slug: form.slug,
-        description: form.description || null,
-        logo_url: form.logoUrl || null,
-        banner_url: form.bannerUrl || null,
+        name: form.name.trim(),
+        slug: normalizedSlug,
+        description: form.description.trim() || null,
+        logo_url: form.logoUrl.trim() || null,
+        banner_url: form.bannerUrl.trim() || null,
         settings: {
           ...(store.settings ?? {}),
-          supportEmail: form.supportEmail || null,
-          shippingNote: form.shippingNote || null,
+          supportEmail: form.supportEmail.trim() || null,
+          shippingNote: form.shippingNote.trim() || null,
         },
       })
       .eq("id", store.id);
@@ -138,6 +158,10 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
       description: "Your storefront identity and customer communication details have been updated.",
     });
     setIsSaving(false);
+  }
+
+  if (authLoading) {
+    return <div className="h-96 animate-pulse bg-stone-100 dark:bg-stone-800" />;
   }
 
   async function handleStripeConnect() {

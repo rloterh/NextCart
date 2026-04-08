@@ -75,7 +75,7 @@ interface ProductEditorFormProps {
 
 export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
   const router = useRouter();
-  const { store } = useAuth();
+  const { store, isLoading: authLoading } = useAuth();
   const addToast = useUIStore((state) => state.addToast);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -171,18 +171,27 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
       return;
     }
 
+    if (form.compareAtPrice && Number(form.compareAtPrice) <= Number(form.price)) {
+      addToast({
+        type: "warning",
+        title: "Compare-at price should be higher",
+        description: "Use a higher compare-at price to create a valid promotional reference price.",
+      });
+      return;
+    }
+
     const supabase = getSupabaseBrowserClient();
     const payload = {
       store_id: store.id,
-      name: form.name,
-      slug: slugify(form.name),
-      description: form.description || null,
-      short_description: form.shortDescription || null,
+      name: form.name.trim(),
+      slug: slugify(form.name.trim()),
+      description: form.description.trim() || null,
+      short_description: form.shortDescription.trim() || null,
       price: Number(form.price),
       compare_at_price: form.compareAtPrice ? Number(form.compareAtPrice) : null,
       cost_price: form.costPrice ? Number(form.costPrice) : null,
-      sku: form.sku || null,
-      barcode: form.barcode || null,
+      sku: form.sku.trim() || null,
+      barcode: form.barcode.trim() || null,
       stock_quantity: Number(form.stockQuantity || 0),
       track_inventory: form.trackInventory,
       category_id: form.categoryId || null,
@@ -232,6 +241,21 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  if (authLoading) {
+    return <div className="h-96 animate-pulse bg-stone-100 dark:bg-stone-800" />;
+  }
+
+  if (!store) {
+    return (
+      <div className="border border-dashed border-stone-200 bg-white p-10 text-center dark:border-stone-800 dark:bg-stone-900">
+        <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Store access unavailable</h1>
+        <p className="mt-3 text-sm text-stone-500">
+          A vendor store record is required before you can manage catalog listings.
+        </p>
+      </div>
+    );
   }
 
   return (

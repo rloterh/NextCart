@@ -1,6 +1,22 @@
 import type { ReactNode } from "react";
+import { redirect } from "next/navigation";
 import { VendorSidebar } from "@/components/layout/vendor-sidebar";
-export default function VendorLayout({ children }: { children: ReactNode }) {
+import { getSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
+
+export default async function VendorLayout({ children }: { children: ReactNode }) {
+  const user = await getServerUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const supabase = await getSupabaseServerClient();
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+
+  if (profile?.role !== "vendor") {
+    redirect("/account");
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-stone-50 dark:bg-stone-950">
       <VendorSidebar />

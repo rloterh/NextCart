@@ -1,7 +1,22 @@
 import type { ReactNode } from "react";
+import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/layout/admin-sidebar";
+import { getSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
 
-export default function AdminLayout({ children }: { children: ReactNode }) {
+export default async function AdminLayout({ children }: { children: ReactNode }) {
+  const user = await getServerUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const supabase = await getSupabaseServerClient();
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+
+  if (profile?.role !== "admin") {
+    redirect("/account");
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-stone-50 dark:bg-stone-950">
       <AdminSidebar />
