@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, CheckCircle2, Mail, MapPin, Package, Truck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Mail, MapPin, Package, PencilLine, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ type VendorOrderDetail = Order & {
 type OrderUpdatePayload = {
   status: Order["status"];
   tracking_number?: string | null;
+  tracking_url?: string | null;
   shipped_at?: string;
   delivered_at?: string;
   cancelled_at?: string;
@@ -39,6 +40,8 @@ export default function VendorOrderDetailPage() {
   const [order, setOrder] = useState<VendorOrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [tracking, setTracking] = useState("");
+  const [trackingUrl, setTrackingUrl] = useState("");
+  const [internalNotes, setInternalNotes] = useState("");
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,6 +70,8 @@ export default function VendorOrderDetailPage() {
       } else {
         setOrder(data as VendorOrderDetail);
         setTracking(data?.tracking_number ?? "");
+        setTrackingUrl(data?.tracking_url ?? "");
+        setInternalNotes(data?.notes ?? "");
       }
 
       setLoading(false);
@@ -85,6 +90,7 @@ export default function VendorOrderDetailPage() {
     }
 
     const normalizedTracking = tracking.trim();
+    const normalizedTrackingUrl = trackingUrl.trim();
     if (status === "shipped" && !normalizedTracking) {
       addToast({ type: "error", title: "Tracking number required", description: "Add a tracking number before marking this order as shipped." });
       return;
@@ -97,6 +103,7 @@ export default function VendorOrderDetailPage() {
     if (status === "shipped") {
       updates.shipped_at = new Date().toISOString();
       updates.tracking_number = normalizedTracking;
+      updates.tracking_url = normalizedTrackingUrl || null;
     }
 
     if (status === "delivered") {
@@ -114,6 +121,27 @@ export default function VendorOrderDetailPage() {
     } else {
       addToast({ type: "success", title: `Order ${status}` });
       setOrder((prev) => (prev ? { ...prev, ...updates } : prev));
+    }
+
+    setUpdating(false);
+  }
+
+  async function saveInternalNotes() {
+    if (!id) return;
+
+    setUpdating(true);
+    const sb = getSupabaseBrowserClient();
+    const { error: updateError } = await sb.from("orders").update({ notes: internalNotes.trim() || null }).eq("id", id);
+
+    if (updateError) {
+      addToast({ type: "error", title: "Unable to save notes", description: updateError.message });
+    } else {
+      addToast({
+        type: "success",
+        title: "Internal notes updated",
+        description: "These notes stay vendor-side so your team keeps fulfillment context in one place.",
+      });
+      setOrder((prev) => (prev ? { ...prev, notes: internalNotes.trim() || null } : prev));
     }
 
     setUpdating(false);
@@ -159,6 +187,13 @@ export default function VendorOrderDetailPage() {
   const canDeliver = order.status === "shipped";
   const storeProfile = order.store ? getStoreProfileContent(order.store) : null;
   const statusContent = orderStatusCopy[order.status];
+  const timeline = [
+    { label: "Order placed", timestamp: order.created_at, description: "The buyer completed checkout and the order entered your queue." },
+    { label: "Confirmed", timestamp: order.status !== "pending" ? order.updated_at : null, description: "Payment and order details were confirmed for vendor handling." },
+    { label: "Shipped", timestamp: order.shipped_at, description: "Tracking and shipment details have been recorded." },
+    { label: "Delivered", timestamp: order.delivered_at, description: "The order was marked as delivered." },
+    { label: "Cancelled", timestamp: order.cancelled_at, description: "The order was cancelled before completion." },
+  ].filter((entry) => entry.label !== "Cancelled" || order.cancelled_at);
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-3xl space-y-6">
@@ -199,6 +234,22 @@ export default function VendorOrderDetailPage() {
         <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Buyer-facing status</p>
         <h2 className="mt-2 font-serif text-2xl text-stone-900 dark:text-white">{statusContent.label}</h2>
         <p className="mt-2 text-sm leading-relaxed text-stone-500">{statusContent.vendorMessage}</p>
+      </Card>
+
+      <Card>
+        <CardTitle>Fulfillment timeline</CardTitle>
+        <div className="mt-4 space-y-4">
+          {timeline.map((entry) => (
+            <div key={entry.label} className="flex gap-3">
+              <div className={`mt-1 h-2.5 w-2.5 rounded-full ${entry.timestamp ? "bg-stone-900 dark:bg-white" : "bg-stone-200 dark:bg-stone-700"}`} />
+              <div>
+                <p className="text-sm font-medium text-stone-900 dark:text-white">{entry.label}</p>
+                <p className="mt-1 text-xs text-stone-400">{entry.timestamp ? formatDate(entry.timestamp) : "Waiting on this milestone"}</p>
+                <p className="mt-1 text-sm text-stone-500">{entry.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </Card>
 
       <Card>
@@ -245,6 +296,9 @@ export default function VendorOrderDetailPage() {
             <CardTitle>Tracking information</CardTitle>
             <div className="mt-4">
               <Input label="Tracking number" value={tracking} onChange={(event) => setTracking(event.target.value)} placeholder="Enter tracking number" />
+              <div className="mt-4">
+                <Input label="Tracking URL" value={trackingUrl} onChange={(event) => setTrackingUrl(event.target.value)} placeholder="Optional carrier tracking link" />
+              </div>
             </div>
             <p className="mt-3 text-sm text-stone-500">The buyer sees shipment progress here as soon as you add and save tracking.</p>
           </Card>
@@ -262,6 +316,27 @@ export default function VendorOrderDetailPage() {
           </div>
         </Card>
       </div>
+
+      <Card>
+        <div className="flex items-center gap-2">
+          <PencilLine className="h-4 w-4 text-stone-400" />
+          <CardTitle>Internal fulfillment notes</CardTitle>
+        </div>
+        <div className="mt-4">
+          <textarea
+            rows={4}
+            value={internalNotes}
+            onChange={(event) => setInternalNotes(event.target.value)}
+            placeholder="Record packing context, supplier delays, team handoff notes, or exception handling details."
+            className="w-full border-b border-stone-200 bg-transparent py-2 text-sm placeholder:text-stone-400 focus:border-stone-900 focus:outline-none dark:border-stone-700"
+          />
+        </div>
+        <div className="mt-4 flex justify-end">
+          <Button type="button" variant="outline" isLoading={updating} onClick={() => void saveInternalNotes()}>
+            Save internal notes
+          </Button>
+        </div>
+      </Card>
 
       {address ? (
         <Card>

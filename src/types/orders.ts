@@ -45,6 +45,7 @@ export interface Order {
   tracking_number: string | null;
   tracking_url: string | null;
   notes: string | null;
+  stripe_transfer_id?: string | null;
   shipped_at: string | null;
   delivered_at: string | null;
   cancelled_at: string | null;

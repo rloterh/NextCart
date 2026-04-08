@@ -2,14 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { AlertCircle, ArrowUpRight, CreditCard, RefreshCcw, ShieldCheck, Store } from "lucide-react";
+import { AlertCircle, ArrowUpRight, CreditCard, RefreshCcw, ShieldCheck, Store, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { slugify } from "@/lib/utils/constants";
+import { formatPrice, slugify } from "@/lib/utils/constants";
 import { useUIStore } from "@/stores/ui-store";
+import type { Order } from "@/types/orders";
 
 interface VendorSettingsPageClientProps {
   stripeState?: string;
@@ -28,6 +29,15 @@ interface StoreSettingsFormState {
   returnsPolicy: string;
   processingTime: string;
   policyHighlights: string;
+}
+
+interface FinanceSnapshot {
+  grossSales: number;
+  estimatedPayouts: number;
+  platformFees: number;
+  openOrders: number;
+  settledOrders: number;
+  latestOrderDate: string | null;
 }
 
 export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClientProps) {
@@ -50,6 +60,7 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
   const [isSaving, setIsSaving] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
   const [isOpeningStripeDashboard, setIsOpeningStripeDashboard] = useState(false);
+  const [financeSnapshot, setFinanceSnapshot] = useState<FinanceSnapshot | null>(null);
 
   useEffect(() => {
     if (!store) return;
@@ -88,6 +99,40 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
       });
     }
   }, [addToast, stripeState]);
+
+  useEffect(() => {
+    async function fetchFinanceSnapshot() {
+      if (!store) {
+        setFinanceSnapshot(null);
+        return;
+      }
+
+      const supabase = getSupabaseBrowserClient();
+      const { data } = await supabase
+        .from("orders")
+        .select("status, total, platform_fee, created_at")
+        .eq("store_id", store.id);
+
+      const orders = (data ?? []) as Array<Pick<Order, "status" | "total" | "platform_fee" | "created_at">>;
+      const grossSales = orders.reduce((sum, order) => sum + Number(order.total), 0);
+      const platformFees = orders.reduce((sum, order) => sum + Number(order.platform_fee), 0);
+      const estimatedPayouts = grossSales - platformFees;
+      const openOrders = orders.filter((order) => ["pending", "confirmed", "processing", "shipped"].includes(order.status)).length;
+      const settledOrders = orders.filter((order) => ["delivered"].includes(order.status)).length;
+      const latestOrderDate = orders.length > 0 ? orders.map((order) => order.created_at).sort().at(-1) ?? null : null;
+
+      setFinanceSnapshot({
+        grossSales,
+        estimatedPayouts,
+        platformFees,
+        openOrders,
+        settledOrders,
+        latestOrderDate,
+      });
+    }
+
+    void fetchFinanceSnapshot();
+  }, [store]);
 
   const payoutState = useMemo(() => {
     if (!store?.stripe_account_id) {
@@ -337,6 +382,49 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
                   Open Stripe dashboard
                 </Button>
               )}
+            </div>
+          </Card>
+
+          <Card>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Finance snapshot</p>
+                <h2 className="mt-2 font-serif text-2xl text-stone-900 dark:text-white">Marketplace payout visibility</h2>
+                <p className="mt-2 text-sm text-stone-500">Track what the marketplace has generated, what platform fees retained, and what should settle to Stripe.</p>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300">
+                <Wallet className="h-5 w-5" />
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div className="border border-stone-200 p-4 dark:border-stone-800">
+                <p className="text-xs uppercase tracking-widest text-stone-400">Gross sales</p>
+                <p className="mt-2 text-xl font-medium text-stone-900 dark:text-white">{formatPrice(financeSnapshot?.grossSales ?? 0)}</p>
+              </div>
+              <div className="border border-stone-200 p-4 dark:border-stone-800">
+                <p className="text-xs uppercase tracking-widest text-stone-400">Estimated payouts</p>
+                <p className="mt-2 text-xl font-medium text-emerald-600">{formatPrice(financeSnapshot?.estimatedPayouts ?? 0)}</p>
+              </div>
+              <div className="border border-stone-200 p-4 dark:border-stone-800">
+                <p className="text-xs uppercase tracking-widest text-stone-400">Platform fees</p>
+                <p className="mt-2 text-xl font-medium text-stone-900 dark:text-white">{formatPrice(financeSnapshot?.platformFees ?? 0)}</p>
+              </div>
+              <div className="border border-stone-200 p-4 dark:border-stone-800">
+                <p className="text-xs uppercase tracking-widest text-stone-400">Open orders</p>
+                <p className="mt-2 text-xl font-medium text-stone-900 dark:text-white">{financeSnapshot?.openOrders ?? 0}</p>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-3 border-t border-stone-100 pt-5 text-sm dark:border-stone-800">
+              <div className="flex items-center justify-between">
+                <span className="text-stone-500">Settled orders</span>
+                <span className="font-medium text-stone-900 dark:text-white">{financeSnapshot?.settledOrders ?? 0}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-stone-500">Latest order activity</span>
+                <span className="font-medium text-stone-900 dark:text-white">{financeSnapshot?.latestOrderDate ? new Date(financeSnapshot.latestOrderDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "No orders yet"}</span>
+              </div>
             </div>
           </Card>
 
