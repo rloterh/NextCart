@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, ShoppingBag, Heart, User, Menu, X } from "lucide-react";
+import { Search, ShoppingBag, Heart, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { useCartStore } from "@/stores/cart-store";
+import { AccountMenu } from "@/components/layout/account-menu";
 
 const navLinks = [
   { label: "Shop", href: "/shop" },
@@ -17,7 +18,7 @@ const navLinks = [
 
 export function StorefrontHeader() {
   const pathname = usePathname();
-  const { isAuthenticated, profile, isVendor, signOut } = useAuth();
+  const { isAuthenticated } = useAuth();
   const itemCount = useCartStore((s) => s.itemCount());
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -86,15 +87,8 @@ export function StorefrontHeader() {
             </Link>
 
             {isAuthenticated ? (
-              <div className="ml-2 flex items-center gap-3">
-                {isVendor && (
-                  <Link href="/vendor/dashboard" className="text-xs font-medium uppercase tracking-wider text-amber-700 hover:text-amber-800 dark:text-amber-500">
-                    Vendor
-                  </Link>
-                )}
-                <Link href="/account" className="rounded-sm p-2 text-stone-600 hover:text-stone-900 dark:text-stone-400">
-                  <User className="h-[18px] w-[18px]" />
-                </Link>
+              <div className="ml-2">
+                <AccountMenu />
               </div>
             ) : (
               <Link href="/login" className="ml-3 text-xs font-medium uppercase tracking-wider text-stone-700 hover:text-stone-900 dark:text-stone-300">

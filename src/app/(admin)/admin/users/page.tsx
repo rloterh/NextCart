@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Users, Shield, Store, ShoppingBag } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/stores/ui-store";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatDate } from "@/lib/utils/constants";

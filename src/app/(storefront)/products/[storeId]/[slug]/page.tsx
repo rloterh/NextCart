@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
-import { ShoppingBag, Heart, Minus, Plus, Star, Truck, RotateCcw, Shield, ChevronRight } from "lucide-react";
+import { motion } from "framer-motion";
+import { ShoppingBag, Minus, Plus, Star, Truck, RotateCcw, Shield, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { WishlistButton } from "@/components/storefront/wishlist-button";
 import { ProductCard } from "@/components/ui/product-card";
 import { ReviewForm, ReviewList } from "@/components/ui/reviews";
 import { useCartStore } from "@/stores/cart-store";
@@ -13,13 +15,18 @@ import { useUIStore } from "@/stores/ui-store";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatPrice } from "@/lib/utils/constants";
 import { productJsonLd } from "@/lib/seo/structured-data";
-import type { Product } from "@/types";
+import type { Category, Product, Store } from "@/types";
+
+type ProductWithRelations = Product & {
+  store?: Store | null;
+  category?: Category | null;
+};
 
 export default function ProductDetailPage() {
   const { storeId, slug } = useParams<{ storeId: string; slug: string }>();
   const addItem = useCartStore((s) => s.addItem);
   const addToast = useUIStore((s) => s.addToast);
-  const [product, setProduct] = useState<Product | null>(null);
+  const [product, setProduct] = useState<ProductWithRelations | null>(null);
   const [related, setRelated] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
@@ -36,7 +43,7 @@ export default function ProductDetailPage() {
         .eq("slug", slug)
         .single();
 
-      setProduct(data as Product | null);
+      setProduct(data as ProductWithRelations | null);
 
       if (data?.category_id) {
         const { data: rel } = await sb
@@ -90,7 +97,7 @@ export default function ProductDetailPage() {
   }
 
   const hasDiscount = product.compare_at_price && product.compare_at_price > product.price;
-  const store = product.store as any;
+  const store = product.store;
   const images = product.images?.length ? product.images : [null];
 
   return (
@@ -101,8 +108,8 @@ export default function ProductDetailPage() {
         <ChevronRight className="h-3 w-3" />
         {product.category && (
           <>
-            <Link href={`/shop?category=${(product.category as any).slug}`} className="hover:text-stone-900 dark:hover:text-white">
-              {(product.category as any).name}
+            <Link href={`/shop?category=${product.category.slug}`} className="hover:text-stone-900 dark:hover:text-white">
+              {product.category.name}
             </Link>
             <ChevronRight className="h-3 w-3" />
           </>
@@ -117,10 +124,10 @@ export default function ProductDetailPage() {
             key={selectedImage}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="aspect-square overflow-hidden bg-stone-100 dark:bg-stone-800"
+            className="relative aspect-square overflow-hidden bg-stone-100 dark:bg-stone-800"
           >
             {images[selectedImage] ? (
-              <img src={images[selectedImage]!} alt={product.name} className="h-full w-full object-cover" />
+              <Image src={images[selectedImage]!} alt={product.name} fill sizes="(min-width: 1024px) 48vw, 100vw" className="object-cover" />
             ) : (
               <div className="flex h-full items-center justify-center text-stone-300"><ShoppingBag className="h-20 w-20" /></div>
             )}
@@ -133,7 +140,7 @@ export default function ProductDetailPage() {
                   onClick={() => setSelectedImage(i)}
                   className={`h-20 w-20 shrink-0 overflow-hidden transition-opacity ${selectedImage === i ? "opacity-100 ring-2 ring-stone-900 dark:ring-white" : "opacity-50 hover:opacity-75"}`}
                 >
-                  {img ? <img src={img} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full bg-stone-200 dark:bg-stone-700" />}
+                  {img ? <Image src={img} alt="" width={80} height={80} className="h-full w-full object-cover" /> : <div className="h-full w-full bg-stone-200 dark:bg-stone-700" />}
                 </button>
               ))}
             </div>
@@ -200,9 +207,7 @@ export default function ProductDetailPage() {
               Add to cart
             </Button>
 
-            <button className="flex h-12 w-12 items-center justify-center border border-stone-200 text-stone-500 transition-colors hover:border-red-300 hover:text-red-500 dark:border-stone-700">
-              <Heart className="h-5 w-5" />
-            </button>
+            <WishlistButton productId={product.id} productName={product.name} className="h-12 w-12 border-stone-200 dark:border-stone-700" />
           </div>
 
           {/* Stock */}
