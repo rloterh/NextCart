@@ -22,4 +22,6 @@ export interface ReviewStats {
   average: number;
   total: number;
   distribution: Record<number, number>; // { 5: 12, 4: 8, 3: 3, 2: 1, 1: 0 }
+  verifiedCount: number;
+  recommendationRate: number;
 }
