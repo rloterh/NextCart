@@ -37,10 +37,20 @@ export const orderStatusCopy: Record<OrderStatus, OrderStatusContent> = {
     buyerMessage: "Your package is on the final delivery run and should arrive soon.",
     vendorMessage: "The shipment is on its final route. Mark delivered once handoff is confirmed.",
   },
+  delivery_failed: {
+    label: "Delivery issue",
+    buyerMessage: "Delivery hit an issue and the vendor is reviewing the next step. Keep an eye on this page for the updated plan.",
+    vendorMessage: "Delivery failed or was interrupted. Coordinate the next fulfillment step before moving the order forward again.",
+  },
   delivered: {
     label: "Delivered",
     buyerMessage: "The order was marked delivered. This is the best time to confirm everything arrived as expected and leave a review.",
     vendorMessage: "Delivery is complete. Encourage a review and be ready for any post-purchase support.",
+  },
+  return_initiated: {
+    label: "Return initiated",
+    buyerMessage: "A return or post-delivery exception has been started. The vendor should share next-step guidance here.",
+    vendorMessage: "A return flow has started. Keep buyer communication clear while you work through the exception.",
   },
   cancelled: {
     label: "Cancelled",

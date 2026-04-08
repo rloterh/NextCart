@@ -46,8 +46,12 @@ export interface Order {
   tracking_url: string | null;
   notes: string | null;
   stripe_transfer_id?: string | null;
+  stripe_transfer_status?: string | null;
+  payout_reconciled_at?: string | null;
   packed_at?: string | null;
   out_for_delivery_at?: string | null;
+  delivery_failed_at?: string | null;
+  return_initiated_at?: string | null;
   shipped_at: string | null;
   delivered_at: string | null;
   cancelled_at: string | null;
@@ -80,7 +84,9 @@ export const ORDER_STATUS_FLOW: OrderStatus[] = [
   "packed",
   "shipped",
   "out_for_delivery",
+  "delivery_failed",
   "delivered",
+  "return_initiated",
 ];
 
 export const ORDER_STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; dot: string }> = {
@@ -90,7 +96,9 @@ export const ORDER_STATUS_CONFIG: Record<OrderStatus, { label: string; color: st
   packed: { label: "Packed", color: "bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300", dot: "bg-indigo-500" },
   shipped: { label: "Shipped", color: "bg-teal-50 text-teal-700 dark:bg-teal-900/20 dark:text-teal-400", dot: "bg-teal-500" },
   out_for_delivery: { label: "Out for delivery", color: "bg-cyan-50 text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-300", dot: "bg-cyan-500" },
+  delivery_failed: { label: "Delivery failed", color: "bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300", dot: "bg-rose-500" },
   delivered: { label: "Delivered", color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400", dot: "bg-emerald-500" },
+  return_initiated: { label: "Return initiated", color: "bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300", dot: "bg-orange-500" },
   cancelled: { label: "Cancelled", color: "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-500", dot: "bg-stone-400" },
   refunded: { label: "Refunded", color: "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400", dot: "bg-red-500" },
 };

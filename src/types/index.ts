@@ -12,7 +12,9 @@ export type OrderStatus =
   | "packed"
   | "shipped"
   | "out_for_delivery"
+  | "delivery_failed"
   | "delivered"
+  | "return_initiated"
   | "cancelled"
   | "refunded";
 

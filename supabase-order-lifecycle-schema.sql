@@ -3,7 +3,11 @@
 
 ALTER TYPE public.order_status ADD VALUE IF NOT EXISTS 'packed';
 ALTER TYPE public.order_status ADD VALUE IF NOT EXISTS 'out_for_delivery';
+ALTER TYPE public.order_status ADD VALUE IF NOT EXISTS 'delivery_failed';
+ALTER TYPE public.order_status ADD VALUE IF NOT EXISTS 'return_initiated';
 
 ALTER TABLE public.orders
   ADD COLUMN IF NOT EXISTS packed_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS out_for_delivery_at TIMESTAMPTZ;
+  ADD COLUMN IF NOT EXISTS out_for_delivery_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS delivery_failed_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS return_initiated_at TIMESTAMPTZ;

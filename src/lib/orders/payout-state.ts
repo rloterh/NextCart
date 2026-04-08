@@ -6,19 +6,31 @@ export interface PayoutState {
   tone: "default" | "success" | "warning" | "muted";
 }
 
-export function getPayoutState(status: OrderStatus, stripeTransferId?: string | null): PayoutState {
-  if (stripeTransferId) {
+export function getPayoutState(
+  status: OrderStatus,
+  stripeTransferId?: string | null,
+  stripeTransferStatus?: string | null
+): PayoutState {
+  if (stripeTransferId && stripeTransferStatus === "paid") {
     return {
-      label: "Transferred",
-      description: "This order already has a Stripe transfer reference recorded.",
+      label: "Settled",
+      description: "This order has a recorded transfer that Stripe marked as paid.",
       tone: "success",
     };
   }
 
-  if (status === "cancelled" || status === "refunded") {
+  if (stripeTransferId) {
+    return {
+      label: "Transfer recorded",
+      description: "A transfer exists for this order and the marketplace is waiting for the latest payout signal.",
+      tone: "warning",
+    };
+  }
+
+  if (status === "cancelled" || status === "refunded" || status === "return_initiated" || status === "delivery_failed") {
     return {
       label: "On hold",
-      description: "This order is no longer on a normal payout path.",
+      description: "This order is no longer on a normal payout path and may need vendor review before settlement.",
       tone: "muted",
     };
   }
