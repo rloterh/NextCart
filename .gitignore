@@ -12,3 +12,4 @@ next-env.d.ts
 coverage/
 .codex
 AGENTS.md
+PHASE-*-GUIDE.md
