@@ -4,6 +4,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ClipboardList, EyeOff, Package, ShieldAlert, Sparkles, Star, Store, UserRoundCheck } from "lucide-react";
+import { PermissionBoundarySummary } from "@/components/platform/permission-boundary-summary";
+import { SensitiveActionReview } from "@/components/platform/sensitive-action-review";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageIntro, PageTransition } from "@/components/ui/page-shell";
@@ -12,6 +14,7 @@ import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { recordAdminAction } from "@/lib/admin/audit";
 import { getPayoutAnomaly } from "@/lib/orders/payout-state";
 import { isExceptionStatus, isReturnStatus } from "@/lib/orders/operations-metrics";
+import { getSensitiveWorkflowReview } from "@/lib/platform/access-review";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatDate, formatPrice } from "@/lib/utils/constants";
 import { useUIStore } from "@/stores/ui-store";
@@ -150,6 +153,7 @@ export default function AdminModerationPage() {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [policyReason, setPolicyReason] = useState("");
+  const [reviewCheckpointConfirmed, setReviewCheckpointConfirmed] = useState(false);
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [actionHistory, setActionHistory] = useState<Record<string, QueueHistoryAction[]>>({});
 
@@ -253,6 +257,10 @@ export default function AdminModerationPage() {
     }
   }, [selectedId, visibleItems]);
 
+  useEffect(() => {
+    setReviewCheckpointConfirmed(false);
+  }, [selectedId]);
+
   const selectedItem = visibleItems.find((item) => item.id === selectedId) ?? null;
   const selectedHistory = selectedItem ? actionHistory[`${selectedItem.entityType}:${selectedItem.id}`] ?? [] : [];
   const summary = {
@@ -261,6 +269,13 @@ export default function AdminModerationPage() {
     reviews: queueItems.filter((item) => item.entityType === "review").length,
     orders: queueItems.filter((item) => item.entityType === "order").length,
   };
+  const selectedReviewCheckpoint = selectedItem
+    ? selectedItem.entityType === "vendor"
+      ? getSensitiveWorkflowReview({ key: "vendor_governance" })
+      : selectedItem.entityType === "review"
+        ? getSensitiveWorkflowReview({ key: "review_moderation" })
+        : null
+    : null;
 
   async function getCurrentAdminId() {
     const supabase = getSupabaseBrowserClient();
@@ -302,6 +317,22 @@ export default function AdminModerationPage() {
   }
 
   async function handleVendorAction(vendor: ModerationVendor, action: "approve" | "suspend" | "reinstate") {
+    if (policyReason.trim().length < 12) {
+      addToast({
+        type: "error",
+        title: "Policy reason required",
+        description: "Add a clear moderation reason before changing vendor governance state.",
+      });
+      return;
+    }
+    if (!reviewCheckpointConfirmed) {
+      addToast({
+        type: "error",
+        title: "Review checkpoint required",
+        description: "Confirm the vendor governance review checklist before applying this action.",
+      });
+      return;
+    }
     const adminId = await getCurrentAdminId();
     if (!adminId) return;
     setActiveAction(`vendor:${vendor.id}:${action}`);
@@ -324,6 +355,7 @@ export default function AdminModerationPage() {
       });
       addToast({ type: "success", title: "Vendor updated", description: `${vendor.name} is now ${nextStatus}.` });
       setPolicyReason("");
+      setReviewCheckpointConfirmed(false);
       await fetchQueue();
     } else {
       addToast({ type: "error", title: "Vendor update failed", description: updateError.message });
@@ -332,6 +364,22 @@ export default function AdminModerationPage() {
   }
 
   async function handleReviewAction(review: ModerationReview, action: "hide" | "restore") {
+    if (policyReason.trim().length < 12) {
+      addToast({
+        type: "error",
+        title: "Moderation reason required",
+        description: "Add a clear reason before changing review visibility.",
+      });
+      return;
+    }
+    if (!reviewCheckpointConfirmed) {
+      addToast({
+        type: "error",
+        title: "Review checkpoint required",
+        description: "Confirm the review-moderation checklist before applying this action.",
+      });
+      return;
+    }
     const adminId = await getCurrentAdminId();
     if (!adminId) return;
     setActiveAction(`review:${review.id}:${action}`);
@@ -353,6 +401,7 @@ export default function AdminModerationPage() {
       });
       addToast({ type: "success", title: nextVisibility ? "Review restored" : "Review hidden", description: "Storefront review visibility has been updated." });
       setPolicyReason("");
+      setReviewCheckpointConfirmed(false);
       await fetchQueue();
     } else {
       addToast({ type: "error", title: "Review update failed", description: updateError.message });
@@ -508,6 +557,32 @@ export default function AdminModerationPage() {
                 <label htmlFor="policy-reason" className="text-xs font-medium uppercase tracking-widest text-stone-400">Policy note</label>
                 <textarea id="policy-reason" value={policyReason} onChange={(event) => setPolicyReason(event.target.value)} rows={4} placeholder="Add the policy or context behind this action." className="mt-2 w-full border border-stone-200 bg-transparent px-3 py-2 text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200" />
               </div>
+
+              {selectedItem.entityType === "vendor" || selectedItem.entityType === "review" ? (
+                <PermissionBoundarySummary
+                  title={selectedItem.entityType === "vendor" ? "Vendor governance boundary" : "Review moderation boundary"}
+                  status="attention"
+                  capability={selectedItem.entityType === "vendor" ? "vendor_governance" : "review_moderation"}
+                  summary={
+                    selectedItem.entityType === "vendor"
+                      ? "Vendor approval, suspension, and reinstatement affect storefront trust, access expectations, and may require parallel review of disputes or payout posture."
+                      : "Review visibility changes affect buyer trust surfaces and should be tied to a clear policy rationale rather than sentiment alone."
+                  }
+                  operatorGuidance={
+                    selectedItem.entityType === "vendor"
+                      ? "Escalate when the storefront has open disputes, payout risk, or mixed moderation signals that make the governance decision less obvious."
+                      : "Escalate when the review suggests fraud, coordinated abuse, or a broader trust issue that should widen beyond this single moderation action."
+                  }
+                />
+              ) : null}
+
+              {selectedReviewCheckpoint ? (
+                <SensitiveActionReview
+                  review={selectedReviewCheckpoint}
+                  checked={reviewCheckpointConfirmed}
+                  onCheckedChange={setReviewCheckpointConfirmed}
+                />
+              ) : null}
 
               <div className="flex flex-wrap gap-2">
                 {selectedItem.entityType === "product" && <>
