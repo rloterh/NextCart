@@ -6,6 +6,7 @@ interface WishlistState {
   productIds: string[];
   isLoading: boolean;
   isLoaded: boolean;
+  error: string | null;
   ensureLoaded: (userId: string | null) => Promise<void>;
   has: (productId: string) => boolean;
   toggle: (userId: string, productId: string) => Promise<{ saved: boolean }>;
@@ -17,10 +18,11 @@ export const useWishlistStore = create<WishlistState>((set, get) => ({
   productIds: [],
   isLoading: false,
   isLoaded: false,
+  error: null,
 
   ensureLoaded: async (userId) => {
     if (!userId) {
-      set({ userId: null, productIds: [], isLoading: false, isLoaded: false });
+      set({ userId: null, productIds: [], isLoading: false, isLoaded: false, error: null });
       return;
     }
 
@@ -28,15 +30,27 @@ export const useWishlistStore = create<WishlistState>((set, get) => ({
       return;
     }
 
-    set({ isLoading: true });
+    set({ isLoading: true, error: null });
     const supabase = getSupabaseBrowserClient();
-    const { data } = await supabase.from("wishlists").select("product_id").eq("user_id", userId);
+    const { data, error } = await supabase.from("wishlists").select("product_id").eq("user_id", userId);
+
+    if (error) {
+      set((state) => ({
+        userId,
+        productIds: state.userId === userId ? state.productIds : [],
+        isLoading: false,
+        isLoaded: false,
+        error: error.message,
+      }));
+      return;
+    }
 
     set({
       userId,
       productIds: (data ?? []).map((item) => item.product_id),
       isLoading: false,
       isLoaded: true,
+      error: null,
     });
   },
 
@@ -82,5 +96,5 @@ export const useWishlistStore = create<WishlistState>((set, get) => ({
     return { saved: true };
   },
 
-  reset: () => set({ userId: null, productIds: [], isLoading: false, isLoaded: false }),
+  reset: () => set({ userId: null, productIds: [], isLoading: false, isLoaded: false, error: null }),
 }));

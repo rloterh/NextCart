@@ -18,6 +18,7 @@ interface StatePanelProps {
   icon?: LucideIcon;
   actionLabel?: string;
   onAction?: () => void;
+  actionIcon?: LucideIcon;
   className?: string;
 }
 
@@ -28,6 +29,7 @@ export function StatePanel({
   icon: Icon = tone === "danger" ? AlertTriangle : Inbox,
   actionLabel,
   onAction,
+  actionIcon: ActionIcon = RefreshCcw,
   className,
 }: StatePanelProps) {
   return (
@@ -38,7 +40,7 @@ export function StatePanel({
       <p className="mt-4 font-serif text-lg text-stone-900 dark:text-white">{title}</p>
       {description ? <p className="mt-2 max-w-md text-sm">{description}</p> : null}
       {actionLabel && onAction ? (
-        <Button size="sm" variant={tone === "danger" ? "outline" : "ghost"} className="mt-5" onClick={onAction} leftIcon={<RefreshCcw className="h-3.5 w-3.5" />}>
+        <Button size="sm" variant={tone === "danger" ? "outline" : "ghost"} className="mt-5" onClick={onAction} leftIcon={<ActionIcon className="h-3.5 w-3.5" />}>
           {actionLabel}
         </Button>
       ) : null}

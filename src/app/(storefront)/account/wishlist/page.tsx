@@ -22,7 +22,6 @@ type WishlistRecord = WishlistItem & {
 export default function WishlistPage() {
   const { user, isLoading: authLoading } = useAuth();
   const ensureLoaded = useWishlistStore((state) => state.ensureLoaded);
-  const savedProductIds = useWishlistStore((state) => state.productIds);
   const [items, setItems] = useState<WishlistRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,8 +65,7 @@ export default function WishlistPage() {
 
   const products = items
     .map((item) => item.product)
-    .filter((product): product is WishlistProduct => Boolean(product))
-    .filter((product) => savedProductIds.includes(product.id));
+    .filter((product): product is WishlistProduct => Boolean(product));
 
   return (
     <PageTransition className="mx-auto max-w-7xl px-6 py-8">

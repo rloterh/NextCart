@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronRight, Heart, ShoppingBag, Store, User } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Card, CardTitle } from "@/components/ui/card";
 import { PageIntro, PageTransition } from "@/components/ui/page-shell";
-import { SkeletonBlock } from "@/components/ui/state-panel";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 
 interface AccountStats {
   orders: number;
@@ -15,6 +16,7 @@ interface AccountStats {
 }
 
 export default function AccountOverviewPage() {
+  const router = useRouter();
   const { profile, user, isVendor, isAdmin, isLoading } = useAuth();
   const [stats, setStats] = useState<AccountStats>({ orders: 0, wishlist: 0 });
   const [loading, setLoading] = useState(true);
@@ -101,6 +103,20 @@ export default function AccountOverviewPage() {
           </Card>
         </div>
       </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <PageTransition className="mx-auto max-w-4xl px-6 py-16">
+        <StatePanel
+          title="Sign in to access your account workspace"
+          description="Your orders, wishlist, and role-based shortcuts are available as soon as your buyer session is restored."
+          actionLabel="Go to login"
+          actionIcon={User}
+          onAction={() => router.push("/login?redirect=/account")}
+        />
+      </PageTransition>
     );
   }
 

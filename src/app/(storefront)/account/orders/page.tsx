@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ChevronRight, Mail, Package, Truck } from "lucide-react";
+import { ChevronRight, Mail, Package, Truck, User } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { OrderStatusBadge } from "@/components/ui/status-badge";
@@ -22,6 +23,7 @@ type BuyerOrderListItem = Pick<Order, "id" | "order_number" | "created_at" | "st
 };
 
 export default function BuyerOrdersPage() {
+  const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const [orders, setOrders] = useState<BuyerOrderListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,6 +93,14 @@ export default function BuyerOrdersPage() {
               <SkeletonBlock lines={1} />
             </Card>
           ))
+        ) : !user ? (
+          <StatePanel
+            title="Sign in to review your orders"
+            description="Order history, delivery progress, and vendor updates stay tied to your buyer session."
+            actionLabel="Go to login"
+            actionIcon={User}
+            onAction={() => router.push("/login?redirect=/account/orders")}
+          />
         ) : error ? (
           <StatePanel
             tone="danger"

@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { ArrowLeft, Mail, MapPin, Truck } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { ArrowLeft, Mail, MapPin, Truck, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { PageIntro, PageTransition } from "@/components/ui/page-shell";
@@ -30,6 +30,7 @@ type BuyerOrderDetail = Order & {
 
 export default function BuyerOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const [order, setOrder] = useState<BuyerOrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,6 +91,20 @@ export default function BuyerOrderDetailPage() {
           tone="danger"
           actionLabel="Retry"
           onAction={() => void fetchOrder()}
+        />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="mx-auto max-w-3xl px-6 py-20">
+        <StatePanel
+          title="Sign in to open this order"
+          description="Your order detail view is available only inside the buyer account session that placed the purchase."
+          actionLabel="Go to login"
+          actionIcon={User}
+          onAction={() => router.push(`/login?redirect=/account/orders/${id}`)}
         />
       </div>
     );
