@@ -1,6 +1,7 @@
 import { createServerClient, type SetAllCookies } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getPublicSupabaseConfig } from "@/lib/platform/readiness.public";
+import type { UserRole } from "@/types";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -20,5 +21,12 @@ export async function updateSession(request: NextRequest) {
     }
   );
   const { data: { user } } = await supabase.auth.getUser();
-  return { supabaseResponse, user };
+  let profileRole: UserRole | null = null;
+
+  if (user) {
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+    profileRole = (profile?.role as UserRole | undefined) ?? null;
+  }
+
+  return { supabaseResponse, user, profileRole };
 }

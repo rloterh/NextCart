@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Heart, ShoppingBag, Store, User } from "lucide-react";
+import { AlertTriangle, ChevronRight, Heart, ShoppingBag, Store, User } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { getAccessBoundaryNotice, type AccessBoundary } from "@/lib/auth/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Card, CardTitle } from "@/components/ui/card";
 import { PageIntro, PageTransition } from "@/components/ui/page-shell";
@@ -20,6 +21,18 @@ export default function AccountOverviewPage() {
   const { profile, user, isVendor, isAdmin, isLoading } = useAuth();
   const [stats, setStats] = useState<AccountStats>({ orders: 0, wishlist: 0 });
   const [loading, setLoading] = useState(true);
+  const [boundaryNotice, setBoundaryNotice] = useState<ReturnType<typeof getAccessBoundaryNotice>>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    setBoundaryNotice(
+      getAccessBoundaryNotice(params.get("boundary") as AccessBoundary | null, params.get("from"))
+    );
+  }, []);
 
   useEffect(() => {
     async function fetchStats() {
@@ -128,6 +141,22 @@ export default function AccountOverviewPage() {
         description="Manage your orders, saved products, and marketplace activity from one clear workspace."
         className="mb-4"
       />
+
+      {boundaryNotice ? (
+        <Card className="mb-6 border-amber-200 bg-amber-50/80 dark:border-amber-900/40 dark:bg-amber-950/20">
+          <div className="flex items-start gap-3">
+            <div className="rounded-full bg-amber-100 p-2 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+              <AlertTriangle className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-amber-900 dark:text-amber-100">{boundaryNotice.title}</p>
+              <p className="mt-1 text-sm leading-relaxed text-amber-800/90 dark:text-amber-200/90">
+                {boundaryNotice.description}
+              </p>
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="grid gap-6 md:grid-cols-2">

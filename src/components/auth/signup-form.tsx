@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ShoppingBag, Store } from "lucide-react";
+import { sanitizeRedirectPath } from "@/lib/auth/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUIStore } from "@/stores/ui-store";
 import { Button } from "@/components/ui/button";
@@ -15,11 +16,14 @@ type SignupRole = "buyer" | "vendor";
 
 export function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const addToast = useUIStore((s) => s.addToast);
   const [isLoading, setIsLoading] = useState(false);
   const [role, setRole] = useState<SignupRole>("buyer");
   const [form, setForm] = useState({ fullName: "", email: "", password: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const redirectTo = sanitizeRedirectPath(searchParams.get("redirect"), "/");
+  const loginHref = redirectTo === "/" ? "/login" : `/login?redirect=${encodeURIComponent(redirectTo)}`;
 
   function validate() {
     const errs: Record<string, string> = {};
@@ -53,7 +57,7 @@ export function SignupForm() {
       title: "Account created!",
       description: role === "vendor" ? "Your vendor application is under review." : "Check your email to verify.",
     });
-    router.push("/login");
+    router.push(loginHref);
   }
 
   return (
@@ -107,7 +111,7 @@ export function SignupForm() {
 
       <p className="mt-8 text-center text-sm text-stone-500">
         Already have an account?{" "}
-        <Link href="/login" className="font-medium text-stone-900 hover:underline dark:text-white">Sign in</Link>
+        <Link href={loginHref} className="font-medium text-stone-900 hover:underline dark:text-white">Sign in</Link>
       </p>
     </motion.div>
   );

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { sanitizeRedirectPath } from "@/lib/auth/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUIStore } from "@/stores/ui-store";
 import { Button } from "@/components/ui/button";
@@ -11,10 +12,13 @@ import { Input } from "@/components/ui/input";
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const addToast = useUIStore((s) => s.addToast);
   const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const redirectTo = sanitizeRedirectPath(searchParams.get("redirect"), "/");
+  const signupHref = redirectTo === "/" ? "/signup" : `/signup?redirect=${encodeURIComponent(redirectTo)}`;
 
   function validate() {
     const errs: Record<string, string> = {};
@@ -36,7 +40,7 @@ export function LoginForm() {
       return;
     }
     addToast({ type: "success", title: "Welcome back" });
-    router.push("/");
+    router.push(redirectTo);
     router.refresh();
   }
 
@@ -82,7 +86,7 @@ export function LoginForm() {
 
       <p className="mt-8 text-center text-sm text-stone-500">
         New here?{" "}
-        <Link href="/signup" className="font-medium text-stone-900 hover:underline dark:text-white">Create account</Link>
+        <Link href={signupHref} className="font-medium text-stone-900 hover:underline dark:text-white">Create account</Link>
       </p>
     </motion.div>
   );
