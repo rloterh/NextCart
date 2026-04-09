@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Clock3, ScrollText, ShieldAlert, Scale } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { StatePanel } from "@/components/ui/state-panel";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatDate } from "@/lib/utils/constants";
 import type { AdminAction, Profile } from "@/types";
@@ -105,9 +106,23 @@ export default function AdminAuditPage() {
             ))}
           </div>
         ) : error ? (
-          <div className="p-8 text-sm text-red-600 dark:text-red-300">We could not load audit events right now. {error}</div>
+          <div className="p-5">
+            <StatePanel
+              tone="danger"
+              title="We could not load audit events"
+              description={error}
+              actionLabel="Try again"
+              onAction={() => window.location.reload()}
+            />
+          </div>
         ) : visibleActions.length === 0 ? (
-          <div className="p-8 text-sm text-stone-500">No audit events match this view.</div>
+          <div className="p-5">
+            <StatePanel
+              title="No audit events match this view"
+              description="Try another entity filter to inspect a different slice of governance activity."
+              icon={ScrollText}
+            />
+          </div>
         ) : (
           <div className="divide-y divide-stone-100 dark:divide-stone-800">
             {visibleActions.map((action) => (

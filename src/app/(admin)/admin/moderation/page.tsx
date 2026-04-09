@@ -6,6 +6,8 @@ import { motion } from "framer-motion";
 import { AlertTriangle, ClipboardList, EyeOff, Package, ShieldAlert, Sparkles, Star, Store, UserRoundCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ProductStatusBadge, ToneBadge, VendorStatusBadge } from "@/components/ui/status-badge";
+import { StatePanel } from "@/components/ui/state-panel";
 import { recordAdminAction } from "@/lib/admin/audit";
 import { getPayoutAnomaly } from "@/lib/orders/payout-state";
 import { isExceptionStatus, isReturnStatus } from "@/lib/orders/operations-metrics";
@@ -334,9 +336,23 @@ export default function AdminModerationPage() {
           {loading ? (
             <div className="space-y-3 p-5">{Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-16 animate-pulse bg-stone-100 dark:bg-stone-800" />)}</div>
           ) : error ? (
-            <div className="p-5 text-sm text-red-600 dark:text-red-300">We could not load the moderation queue right now. {error}</div>
+            <div className="p-5">
+              <StatePanel
+                tone="danger"
+                title="We could not load the moderation queue"
+                description={error}
+                actionLabel="Try again"
+                onAction={() => void fetchQueue()}
+              />
+            </div>
           ) : visibleItems.length === 0 ? (
-            <div className="p-8 text-sm text-stone-500">No moderation items match the current filters.</div>
+            <div className="p-5">
+              <StatePanel
+                title="No moderation items match the current filters"
+                description="Try another queue tab or search term to review a different signal."
+                icon={ShieldAlert}
+              />
+            </div>
           ) : (
             <div className="divide-y divide-stone-100 dark:divide-stone-800">
               {visibleItems.map((item) => (
@@ -375,18 +391,18 @@ export default function AdminModerationPage() {
 
               <div className="space-y-3 border-y border-stone-100 py-4 text-sm dark:border-stone-800">
                 {selectedItem.entityType === "product" && <>
-                  <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Status</span><span className="font-medium text-stone-900 dark:text-white">{selectedItem.product.status}</span></div>
+                  <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Status</span><ProductStatusBadge status={selectedItem.product.status} /></div>
                   <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Merchandising</span><span className="font-medium text-stone-900 dark:text-white">{selectedItem.product.is_featured ? "Featured" : "Standard listing"}</span></div>
                   <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Signals</span><span className="font-medium text-stone-900 dark:text-white">{selectedItem.product.sale_count} sales / {selectedItem.product.view_count} views / {selectedItem.product.stock_quantity} in stock</span></div>
                 </>}
                 {selectedItem.entityType === "vendor" && <>
-                  <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Status</span><span className="font-medium text-stone-900 dark:text-white">{selectedItem.vendor.status}</span></div>
+                  <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Status</span><VendorStatusBadge status={selectedItem.vendor.status} /></div>
                   <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Owner</span><span className="font-medium text-stone-900 dark:text-white">{selectedItem.vendor.owner?.email ?? "Owner unavailable"}</span></div>
                   <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Business volume</span><span className="font-medium text-stone-900 dark:text-white">{selectedItem.vendor.total_orders} orders / {formatPrice(Number(selectedItem.vendor.total_revenue))}</span></div>
                 </>}
                 {selectedItem.entityType === "review" && <>
-                  <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Rating</span><span className="font-medium text-stone-900 dark:text-white">{selectedItem.review.rating} / 5</span></div>
-                  <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Visibility</span><span className="font-medium text-stone-900 dark:text-white">{selectedItem.review.is_visible ? "Visible" : "Hidden"}</span></div>
+                  <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Rating</span><ToneBadge tone={selectedItem.review.rating <= 2 ? "danger" : selectedItem.review.rating === 3 ? "warning" : "success"}>{selectedItem.review.rating} / 5</ToneBadge></div>
+                  <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Visibility</span><ToneBadge tone={selectedItem.review.is_visible ? "success" : "muted"}>{selectedItem.review.is_visible ? "Visible" : "Hidden"}</ToneBadge></div>
                   <div><p className="text-xs font-medium uppercase tracking-widest text-stone-400">Review body</p><p className="mt-2 text-sm text-stone-600 dark:text-stone-300">{selectedItem.review.body?.trim() || "No body was submitted with this review."}</p></div>
                 </>}
                 {selectedItem.entityType === "order" && <>

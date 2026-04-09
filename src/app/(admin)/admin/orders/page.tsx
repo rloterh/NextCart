@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, DollarSign, Package, ShieldAlert } from "lucide-react";
-import { Card, CardTitle } from "@/components/ui/card";
+import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { OrderStatusBadge, ToneBadge } from "@/components/ui/status-badge";
+import { StatePanel } from "@/components/ui/state-panel";
 import { getPayoutAnomaly, getPayoutState } from "@/lib/orders/payout-state";
 import { isExceptionStatus, isReturnStatus } from "@/lib/orders/operations-metrics";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatDate, formatPrice } from "@/lib/utils/constants";
 import type { OrderItem } from "@/types/orders";
-import { ORDER_STATUS_CONFIG } from "@/types/orders";
 import type { Order } from "@/types/orders";
 import type { Profile, Store } from "@/types";
 
@@ -186,10 +187,12 @@ export default function AdminOrdersPage() {
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       <div className="max-w-3xl">
-        <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Order risk review</h1>
-        <p className="mt-1 text-sm text-stone-500">
-          Review unresolved delivery, return, and payout issues at the order level so admins can intervene with context.
-        </p>
+        <Card className="border-stone-200/70 bg-stone-50/80 p-6 dark:border-stone-800 dark:bg-stone-900/60">
+          <CardTitle className="text-2xl">Order risk review</CardTitle>
+          <CardDescription>
+            Review unresolved delivery, return, and payout issues at the order level so admins can intervene with context.
+          </CardDescription>
+        </Card>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -248,13 +251,27 @@ export default function AdminOrdersPage() {
           {loading ? (
             <div className="space-y-3 p-5">
               {Array.from({ length: 5 }).map((_, index) => (
-                <div key={index} className="h-16 animate-pulse bg-stone-100 dark:bg-stone-800" />
+                <div key={index} className="h-16 animate-pulse rounded-sm bg-stone-100 dark:bg-stone-800" />
               ))}
             </div>
           ) : error ? (
-            <div className="p-5 text-sm text-red-600 dark:text-red-300">We could not load flagged orders right now. {error}</div>
+            <div className="p-5">
+              <StatePanel
+                tone="danger"
+                title="We could not load flagged orders"
+                description={error}
+                actionLabel="Try again"
+                onAction={() => window.location.reload()}
+              />
+            </div>
           ) : visibleOrders.length === 0 ? (
-            <div className="p-8 text-sm text-stone-500">No orders currently match this review view.</div>
+            <div className="p-5">
+              <StatePanel
+                title="No orders match this review view"
+                description="Try another risk filter or search for a different order, store, or buyer."
+                icon={Package}
+              />
+            </div>
           ) : (
             <div className="divide-y divide-stone-100 dark:divide-stone-800">
               {visibleOrders.map((order) => {
@@ -289,10 +306,12 @@ export default function AdminOrdersPage() {
                         </div>
                       </div>
                       <div className="text-right text-xs text-stone-500">
-                        <p className={`inline-flex px-2 py-0.5 font-medium uppercase tracking-wider ${ORDER_STATUS_CONFIG[order.status].color}`}>
-                          {ORDER_STATUS_CONFIG[order.status].label}
-                        </p>
-                        <p className="mt-2">{payoutState.label}</p>
+                        <OrderStatusBadge status={order.status} />
+                        <div className="mt-2">
+                          <ToneBadge tone={payoutState.tone === "success" ? "success" : payoutState.tone === "warning" ? "warning" : payoutState.tone === "muted" ? "muted" : "info"}>
+                            {payoutState.label}
+                          </ToneBadge>
+                        </div>
                         <p className="mt-1">{formatPrice(Number(order.total))}</p>
                       </div>
                     </div>
@@ -331,9 +350,7 @@ export default function AdminOrdersPage() {
               <div className="space-y-3 border-t border-stone-100 pt-5 text-sm dark:border-stone-800">
                 <div className="flex items-center justify-between">
                   <span className="text-stone-500">Order status</span>
-                  <span className={`inline-flex px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${ORDER_STATUS_CONFIG[selectedOrder.status].color}`}>
-                    {ORDER_STATUS_CONFIG[selectedOrder.status].label}
-                  </span>
+                  <OrderStatusBadge status={selectedOrder.status} />
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-stone-500">Payout state</span>
