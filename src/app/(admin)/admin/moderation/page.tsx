@@ -12,7 +12,7 @@ import { isExceptionStatus, isReturnStatus } from "@/lib/orders/operations-metri
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatDate, formatPrice } from "@/lib/utils/constants";
 import { useUIStore } from "@/stores/ui-store";
-import type { Category, Product, Profile, Store as StoreType, VendorStatus } from "@/types";
+import type { AdminAction, Category, Product, Profile, Store as StoreType, VendorStatus } from "@/types";
 import type { Order } from "@/types/orders";
 import type { Review } from "@/types/reviews";
 
@@ -44,6 +44,10 @@ type ModerationQueueItem =
   | { entityType: "vendor"; id: string; severity: QueueSeverity; title: string; subtitle: string; createdAt: string; tags: string[]; vendor: ModerationVendor }
   | { entityType: "review"; id: string; severity: QueueSeverity; title: string; subtitle: string; createdAt: string; tags: string[]; review: ModerationReview }
   | { entityType: "order"; id: string; severity: QueueSeverity; title: string; subtitle: string; createdAt: string; tags: string[]; order: ModerationOrder };
+
+type QueueHistoryAction = AdminAction & {
+  admin: Pick<Profile, "id" | "full_name" | "email"> | null;
+};
 
 const queueTabs: Array<{ label: string; value: QueueFilter }> = [
   { label: "All", value: "all" },
@@ -137,24 +141,27 @@ export default function AdminModerationPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [policyReason, setPolicyReason] = useState("");
   const [activeAction, setActiveAction] = useState<string | null>(null);
+  const [actionHistory, setActionHistory] = useState<Record<string, QueueHistoryAction[]>>({});
 
   const fetchQueue = useCallback(async () => {
     setLoading(true);
     setError(null);
     const supabase = getSupabaseBrowserClient();
-    const [productsRes, vendorsRes, reviewsRes, ordersRes] = await Promise.all([
+    const [productsRes, vendorsRes, reviewsRes, ordersRes, actionsRes] = await Promise.all([
       supabase.from("products").select("id, store_id, name, slug, status, is_featured, view_count, sale_count, stock_quantity, price, rating_avg, rating_count, created_at, store:stores(id, name, slug), category:categories(id, name)").order("created_at", { ascending: false }).limit(80),
       supabase.from("stores").select("id, owner_id, name, slug, status, rating_avg, rating_count, total_orders, total_revenue, created_at, owner:profiles(id, full_name, email)").order("created_at", { ascending: false }).limit(60),
       supabase.from("reviews").select("id, product_id, store_id, rating, title, body, is_verified_purchase, is_visible, helpful_count, created_at, profile:profiles(full_name), product:products(id, name, slug, status), store:stores(id, name, slug, status)").order("created_at", { ascending: false }).limit(80),
       supabase.from("orders").select("id, order_number, status, total, created_at, stripe_transfer_id, stripe_transfer_status, payout_reconciled_at, buyer:profiles(full_name, email), store:stores(id, name, slug, status)").order("created_at", { ascending: false }).limit(80),
+      supabase.from("admin_actions").select("*, admin:profiles(id, full_name, email)").in("entity_type", ["product", "vendor", "review", "order"]).order("created_at", { ascending: false }).limit(200),
     ]);
 
-    const firstError = [productsRes.error, vendorsRes.error, reviewsRes.error, ordersRes.error].find(Boolean);
+    const firstError = [productsRes.error, vendorsRes.error, reviewsRes.error, ordersRes.error, actionsRes.error].find(Boolean);
     if (firstError) {
       setProducts([]);
       setVendors([]);
       setReviews([]);
       setOrders([]);
+      setActionHistory({});
       setError(firstError.message);
       setLoading(false);
       return;
@@ -164,6 +171,13 @@ export default function AdminModerationPage() {
     setVendors((vendorsRes.data ?? []) as ModerationVendor[]);
     setReviews((reviewsRes.data ?? []) as ModerationReview[]);
     setOrders((ordersRes.data ?? []) as ModerationOrder[]);
+    const historyMap: Record<string, QueueHistoryAction[]> = {};
+    for (const action of ((actionsRes.data ?? []) as QueueHistoryAction[])) {
+      const key = `${action.entity_type}:${action.entity_id}`;
+      historyMap[key] ??= [];
+      historyMap[key].push(action);
+    }
+    setActionHistory(historyMap);
     setLoading(false);
   }, []);
 
@@ -203,6 +217,7 @@ export default function AdminModerationPage() {
   }, [selectedId, visibleItems]);
 
   const selectedItem = visibleItems.find((item) => item.id === selectedId) ?? null;
+  const selectedHistory = selectedItem ? actionHistory[`${selectedItem.entityType}:${selectedItem.id}`] ?? [] : [];
   const summary = {
     total: queueItems.length,
     high: queueItems.filter((item) => item.severity === "high").length,
@@ -379,6 +394,28 @@ export default function AdminModerationPage() {
                   <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Buyer</span><span className="font-medium text-stone-900 dark:text-white">{selectedItem.order.buyer?.full_name || selectedItem.order.buyer?.email || "Buyer unavailable"}</span></div>
                   <div><p className="text-xs font-medium uppercase tracking-widest text-stone-400">Payout signal</p><p className="mt-2 text-sm text-stone-600 dark:text-stone-300">{getPayoutAnomaly(selectedItem.order.status, selectedItem.order.stripe_transfer_id, selectedItem.order.stripe_transfer_status, selectedItem.order.payout_reconciled_at)?.description ?? "This order is on a normal settlement path right now."}</p></div>
                 </>}
+              </div>
+
+              <div>
+                <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Action history</p>
+                {selectedHistory.length === 0 ? (
+                  <p className="mt-2 text-sm text-stone-500">No prior moderation actions have been logged for this item yet.</p>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {selectedHistory.slice(0, 4).map((action) => (
+                      <div key={action.id} className="border border-stone-200 bg-stone-50/70 px-3 py-3 text-sm dark:border-stone-800 dark:bg-stone-950/30">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-medium text-stone-900 dark:text-white">{action.action.replaceAll("_", " ")}</p>
+                            <p className="mt-1 text-xs text-stone-500">{action.admin?.full_name ?? action.admin?.email ?? "Unknown admin"}</p>
+                          </div>
+                          <p className="text-xs text-stone-500">{formatDate(action.created_at)}</p>
+                        </div>
+                        {action.reason ? <p className="mt-2 text-sm text-stone-500">{action.reason}</p> : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>

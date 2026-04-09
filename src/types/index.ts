@@ -8,6 +8,8 @@ export type ProductStatus = "draft" | "active" | "paused" | "archived";
 export type DisputeStatus = "open" | "investigating" | "vendor_action_required" | "refund_pending" | "resolved" | "dismissed";
 export type DisputePriority = "low" | "medium" | "high" | "critical";
 export type DisputeIssueType = "refund_request" | "delivery_issue" | "product_issue" | "return_dispute" | "payout_hold";
+export type RefundDecision = "under_review" | "approved" | "denied" | "issued";
+export type PayoutHoldStatus = "clear" | "hold_requested" | "on_hold" | "released";
 export type OrderStatus =
   | "pending"
   | "confirmed"
@@ -88,6 +90,10 @@ export interface DisputeCase {
   admin_notes: string | null;
   resolution: string | null;
   refund_amount: number | null;
+  refund_decision: RefundDecision;
+  refund_decided_at: string | null;
+  payout_hold_status: PayoutHoldStatus;
+  payout_hold_reason: string | null;
   assigned_admin_id: string | null;
   resolved_at: string | null;
   created_at: string;
@@ -95,6 +101,7 @@ export interface DisputeCase {
   order?: unknown;
   store?: Store;
   buyer?: Profile;
+  assigned_admin?: Pick<Profile, "id" | "full_name" | "email"> | null;
 }
 
 // ============================================

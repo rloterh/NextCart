@@ -6,10 +6,11 @@ import { AlertTriangle, Clock3, Package, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { recordAdminAction } from "@/lib/admin/audit";
+import { getDisputeSlaState, getSlaToneClasses } from "@/lib/admin/governance";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUIStore } from "@/stores/ui-store";
 import { formatDate, formatPrice } from "@/lib/utils/constants";
-import type { DisputeCase, DisputeIssueType, DisputePriority, DisputeStatus, Profile, Store } from "@/types";
+import type { AdminAction, DisputeCase, DisputeIssueType, DisputePriority, DisputeStatus, PayoutHoldStatus, Profile, RefundDecision, Store } from "@/types";
 import type { Order } from "@/types/orders";
 
 type DisputesTab = "cases" | "new_case";
@@ -26,6 +27,10 @@ type DisputeCaseRecord = DisputeCase & {
 type EligibleOrder = Pick<Order, "id" | "order_number" | "status" | "total" | "created_at" | "buyer_id" | "store_id"> & {
   buyer: CaseBuyer | null;
   store: CaseStore | null;
+};
+
+type DisputeAction = AdminAction & {
+  admin: Pick<Profile, "id" | "full_name" | "email"> | null;
 };
 
 const statusTabs: Array<{ label: string; value: DisputeStatus | "all" }> = [
@@ -53,6 +58,20 @@ const priorityOptions: Array<{ label: string; value: DisputePriority }> = [
   { label: "Critical", value: "critical" },
 ];
 
+const refundDecisionOptions: Array<{ label: string; value: RefundDecision }> = [
+  { label: "Under review", value: "under_review" },
+  { label: "Approved", value: "approved" },
+  { label: "Denied", value: "denied" },
+  { label: "Issued", value: "issued" },
+];
+
+const payoutHoldOptions: Array<{ label: string; value: PayoutHoldStatus }> = [
+  { label: "Clear", value: "clear" },
+  { label: "Hold requested", value: "hold_requested" },
+  { label: "On hold", value: "on_hold" },
+  { label: "Released", value: "released" },
+];
+
 const editableStatuses: DisputeStatus[] = ["open", "investigating", "vendor_action_required", "refund_pending", "resolved", "dismissed"];
 
 const priorityClasses: Record<DisputePriority, string> = {
@@ -66,6 +85,23 @@ function isMissingDisputesTable(message: string | null | undefined) {
   if (!message) return false;
   const normalized = message.toLowerCase();
   return normalized.includes("dispute_cases") || normalized.includes("relation") || normalized.includes("does not exist");
+}
+
+function normalizeDisputeCase(entry: Partial<DisputeCaseRecord>): DisputeCaseRecord {
+  return {
+    ...entry,
+    refund_decision: (entry.refund_decision as RefundDecision | undefined) ?? "under_review",
+    refund_decided_at: entry.refund_decided_at ?? null,
+    payout_hold_status: (entry.payout_hold_status as PayoutHoldStatus | undefined) ?? "clear",
+    payout_hold_reason: entry.payout_hold_reason ?? null,
+    assigned_admin_id: entry.assigned_admin_id ?? null,
+    resolution: entry.resolution ?? null,
+    requested_resolution: entry.requested_resolution ?? null,
+    admin_notes: entry.admin_notes ?? null,
+    vendor_notes: entry.vendor_notes ?? null,
+    refund_amount: entry.refund_amount ?? null,
+    resolved_at: entry.resolved_at ?? null,
+  } as DisputeCaseRecord;
 }
 
 export default function AdminDisputesPage() {
@@ -87,39 +123,55 @@ export default function AdminDisputesPage() {
   const [refundAmount, setRefundAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [savingCase, setSavingCase] = useState(false);
+  const [admins, setAdmins] = useState<Array<Pick<Profile, "id" | "full_name" | "email">>>([]);
+  const [actionHistory, setActionHistory] = useState<Record<string, DisputeAction[]>>({});
 
   const fetchDisputes = useCallback(async () => {
     setLoading(true);
     setError(null);
     setMigrationRequired(false);
     const supabase = getSupabaseBrowserClient();
-    const [casesRes, ordersRes] = await Promise.all([
+    const [casesRes, ordersRes, adminsRes, actionsRes] = await Promise.all([
       supabase.from("dispute_cases").select("*, order:orders(id, order_number, status, total, created_at), store:stores(id, name, slug, status), buyer:profiles(id, full_name, email)").order("created_at", { ascending: false }),
       supabase.from("orders").select("id, order_number, status, total, created_at, buyer_id, store_id, buyer:profiles(id, full_name, email), store:stores(id, name, slug, status)").order("created_at", { ascending: false }).limit(150),
+      supabase.from("profiles").select("id, full_name, email").eq("role", "admin").order("full_name", { ascending: true }),
+      supabase.from("admin_actions").select("*, admin:profiles(id, full_name, email)").eq("entity_type", "dispute_case").order("created_at", { ascending: false }).limit(200),
     ]);
 
     if (casesRes.error) {
       setCases([]);
       setEligibleOrders([]);
+      setAdmins([]);
+      setActionHistory({});
       setMigrationRequired(isMissingDisputesTable(casesRes.error.message));
       setError(casesRes.error.message);
       setLoading(false);
       return;
     }
 
-    if (ordersRes.error) {
+    const firstFollowupError = [ordersRes.error, adminsRes.error, actionsRes.error].find(Boolean);
+    if (firstFollowupError) {
       setCases([]);
       setEligibleOrders([]);
-      setError(ordersRes.error.message);
+      setAdmins([]);
+      setActionHistory({});
+      setError(firstFollowupError.message);
       setLoading(false);
       return;
     }
 
-    const nextCases = (casesRes.data ?? []) as DisputeCaseRecord[];
+    const nextCases = ((casesRes.data ?? []) as Partial<DisputeCaseRecord>[]).map(normalizeDisputeCase);
     const activeOrderIds = new Set(nextCases.filter((entry) => !["resolved", "dismissed"].includes(entry.status)).map((entry) => entry.order_id));
     const nextEligibleOrders = ((ordersRes.data ?? []) as EligibleOrder[]).filter((order) => !activeOrderIds.has(order.id));
+    const historyMap: Record<string, DisputeAction[]> = {};
+    for (const action of ((actionsRes.data ?? []) as DisputeAction[])) {
+      historyMap[action.entity_id] ??= [];
+      historyMap[action.entity_id].push(action);
+    }
     setCases(nextCases);
     setEligibleOrders(nextEligibleOrders);
+    setAdmins((adminsRes.data ?? []) as Array<Pick<Profile, "id" | "full_name" | "email">>);
+    setActionHistory(historyMap);
     setLoading(false);
   }, []);
 
@@ -145,6 +197,7 @@ export default function AdminDisputesPage() {
 
   const selectedCase = visibleCases.find((entry) => entry.id === selectedCaseId) ?? null;
   const selectedOrder = eligibleOrders.find((entry) => entry.id === selectedOrderId) ?? null;
+  const selectedHistory = selectedCase ? actionHistory[selectedCase.id] ?? [] : [];
   const caseStats = {
     open: cases.filter((entry) => entry.status === "open").length,
     pendingRefund: cases.filter((entry) => entry.status === "refund_pending").length,
@@ -223,11 +276,16 @@ export default function AdminDisputesPage() {
     setSavingCase(true);
     const supabase = getSupabaseBrowserClient();
     const nextResolvedAt = ["resolved", "dismissed"].includes(selectedCase.status) ? new Date().toISOString() : null;
+    const nextRefundDecidedAt = selectedCase.refund_decision === "under_review" ? null : new Date().toISOString();
     const { error: updateError } = await supabase.from("dispute_cases").update({
       status: selectedCase.status,
       admin_notes: selectedCase.admin_notes?.trim() || null,
       resolution: selectedCase.resolution?.trim() || null,
       refund_amount: selectedCase.refund_amount ? Number(selectedCase.refund_amount) : null,
+      refund_decision: selectedCase.refund_decision,
+      refund_decided_at: nextRefundDecidedAt,
+      payout_hold_status: selectedCase.payout_hold_status,
+      payout_hold_reason: selectedCase.payout_hold_reason?.trim() || null,
       resolved_at: nextResolvedAt,
       assigned_admin_id: selectedCase.assigned_admin_id || adminId,
     }).eq("id", selectedCase.id);
@@ -238,7 +296,21 @@ export default function AdminDisputesPage() {
       return;
     }
 
-    await recordAdminAction(supabase, { adminId, action: "dispute.update", entityType: "dispute_case", entityId: selectedCase.id, reason: selectedCase.admin_notes || selectedCase.summary, metadata: { status: selectedCase.status, resolution: selectedCase.resolution, refundAmount: selectedCase.refund_amount } });
+    await recordAdminAction(supabase, {
+      adminId,
+      action: "dispute.update",
+      entityType: "dispute_case",
+      entityId: selectedCase.id,
+      reason: selectedCase.admin_notes || selectedCase.summary,
+      metadata: {
+        status: selectedCase.status,
+        resolution: selectedCase.resolution,
+        refundAmount: selectedCase.refund_amount,
+        refundDecision: selectedCase.refund_decision,
+        payoutHoldStatus: selectedCase.payout_hold_status,
+        assignedAdminId: selectedCase.assigned_admin_id || adminId,
+      },
+    });
     addToast({ type: "success", title: "Dispute case updated", description: "The workflow state and notes were saved." });
     await fetchDisputes();
     setSavingCase(false);
@@ -296,13 +368,16 @@ export default function AdminDisputesPage() {
                 <div className="p-8 text-sm text-stone-500">No dispute cases match the current view.</div>
               ) : (
                 <div className="divide-y divide-stone-100 dark:divide-stone-800">
-                  {visibleCases.map((entry) => (
+                  {visibleCases.map((entry) => {
+                    const slaState = getDisputeSlaState(entry.created_at, entry.priority, entry.status);
+                    return (
                     <button key={entry.id} type="button" onClick={() => setSelectedCaseId(entry.id)} className={`w-full px-5 py-4 text-left transition-colors ${selectedCaseId === entry.id ? "bg-stone-50 dark:bg-stone-800/40" : "hover:bg-stone-50/70 dark:hover:bg-stone-800/20"}`}>
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${priorityClasses[entry.priority]}`}>{entry.priority}</span>
                             <span className="text-[10px] font-medium uppercase tracking-widest text-stone-400">{entry.status.replaceAll("_", " ")}</span>
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${getSlaToneClasses(slaState.tone)}`}>{slaState.label}</span>
                           </div>
                           <p className="mt-2 text-sm font-medium text-stone-900 dark:text-white">{entry.summary}</p>
                           <p className="mt-1 text-xs text-stone-500">{entry.order?.order_number ?? "Unknown order"} / {entry.store?.name ?? "Unknown store"}</p>
@@ -310,7 +385,7 @@ export default function AdminDisputesPage() {
                         <p className="text-[10px] uppercase tracking-wider text-stone-400">{formatDate(entry.created_at)}</p>
                       </div>
                     </button>
-                  ))}
+                  )})}
                 </div>
               )}
             </Card>
@@ -333,13 +408,40 @@ export default function AdminDisputesPage() {
                     <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Buyer</span><span className="font-medium text-stone-900 dark:text-white">{selectedCase.buyer?.full_name || selectedCase.buyer?.email || "Buyer unavailable"}</span></div>
                     <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Order total</span><span className="font-medium text-stone-900 dark:text-white">{selectedCase.order ? formatPrice(Number(selectedCase.order.total)) : "Unavailable"}</span></div>
                     <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Requested resolution</span><span className="font-medium text-stone-900 dark:text-white">{selectedCase.requested_resolution || "Not specified"}</span></div>
+                    <div className="flex items-center justify-between gap-3"><span className="text-stone-500">SLA target</span><span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${getSlaToneClasses(getDisputeSlaState(selectedCase.created_at, selectedCase.priority, selectedCase.status).tone)}`}>{getDisputeSlaState(selectedCase.created_at, selectedCase.priority, selectedCase.status).label}</span></div>
                   </div>
 
                   <div className="grid gap-4">
                     <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Case status<select value={selectedCase.status} onChange={(event) => patchSelectedCase({ status: event.target.value as DisputeStatus })} className="h-10 border border-stone-200 bg-transparent px-3 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200">{editableStatuses.map((entry) => <option key={entry} value={entry}>{entry.replaceAll("_", " ")}</option>)}</select></label>
+                    <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Assigned admin<select value={selectedCase.assigned_admin_id ?? ""} onChange={(event) => patchSelectedCase({ assigned_admin_id: event.target.value || null })} className="h-10 border border-stone-200 bg-transparent px-3 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200"><option value="">Unassigned</option>{admins.map((admin) => <option key={admin.id} value={admin.id}>{admin.full_name || admin.email}</option>)}</select></label>
                     <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Refund amount<input type="number" min="0" step="0.01" value={selectedCase.refund_amount ?? ""} onChange={(event) => patchSelectedCase({ refund_amount: event.target.value ? Number(event.target.value) : null })} className="h-10 border border-stone-200 bg-transparent px-3 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200" /></label>
+                    <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Refund decision<select value={selectedCase.refund_decision} onChange={(event) => patchSelectedCase({ refund_decision: event.target.value as RefundDecision })} className="h-10 border border-stone-200 bg-transparent px-3 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200">{refundDecisionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                    <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Payout hold<select value={selectedCase.payout_hold_status} onChange={(event) => patchSelectedCase({ payout_hold_status: event.target.value as PayoutHoldStatus })} className="h-10 border border-stone-200 bg-transparent px-3 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200">{payoutHoldOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                    <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Payout hold reason<textarea rows={3} value={selectedCase.payout_hold_reason ?? ""} onChange={(event) => patchSelectedCase({ payout_hold_reason: event.target.value })} className="border border-stone-200 bg-transparent px-3 py-2 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200" /></label>
                     <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Admin notes<textarea rows={4} value={selectedCase.admin_notes ?? ""} onChange={(event) => patchSelectedCase({ admin_notes: event.target.value })} className="border border-stone-200 bg-transparent px-3 py-2 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200" /></label>
                     <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Resolution notes<textarea rows={3} value={selectedCase.resolution ?? ""} onChange={(event) => patchSelectedCase({ resolution: event.target.value })} className="border border-stone-200 bg-transparent px-3 py-2 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200" /></label>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Case history</p>
+                    {selectedHistory.length === 0 ? (
+                      <p className="mt-2 text-sm text-stone-500">No actions have been logged for this case yet.</p>
+                    ) : (
+                      <div className="mt-3 space-y-3">
+                        {selectedHistory.slice(0, 5).map((action) => (
+                          <div key={action.id} className="border border-stone-200 bg-stone-50/70 px-3 py-3 text-sm dark:border-stone-800 dark:bg-stone-950/30">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="font-medium text-stone-900 dark:text-white">{action.action.replaceAll("_", " ")}</p>
+                                <p className="mt-1 text-xs text-stone-500">{action.admin?.full_name ?? action.admin?.email ?? "Unknown admin"}</p>
+                              </div>
+                              <p className="text-xs text-stone-500">{formatDate(action.created_at)}</p>
+                            </div>
+                            {action.reason ? <p className="mt-2 text-sm text-stone-500">{action.reason}</p> : null}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <Button size="sm" isLoading={savingCase} onClick={() => void updateSelectedCase()} leftIcon={<Scale className="h-3.5 w-3.5" />}>Save case updates</Button>
