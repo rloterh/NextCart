@@ -87,6 +87,12 @@ function isMissingDisputesTable(message: string | null | undefined) {
   return normalized.includes("dispute_cases") || normalized.includes("relation") || normalized.includes("does not exist");
 }
 
+function isMissingDisputeWorkflowColumns(message: string | null | undefined) {
+  if (!message) return false;
+  const normalized = message.toLowerCase();
+  return normalized.includes("refund_decision") || normalized.includes("payout_hold_status") || normalized.includes("column");
+}
+
 function normalizeDisputeCase(entry: Partial<DisputeCaseRecord>): DisputeCaseRecord {
   return {
     ...entry,
@@ -111,6 +117,7 @@ export default function AdminDisputesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [migrationRequired, setMigrationRequired] = useState(false);
+  const [workflowMigrationRequired, setWorkflowMigrationRequired] = useState(false);
   const [tab, setTab] = useState<DisputesTab>("cases");
   const [filter, setFilter] = useState<DisputeStatus | "all">("all");
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
@@ -130,12 +137,14 @@ export default function AdminDisputesPage() {
     setLoading(true);
     setError(null);
     setMigrationRequired(false);
+    setWorkflowMigrationRequired(false);
     const supabase = getSupabaseBrowserClient();
-    const [casesRes, ordersRes, adminsRes, actionsRes] = await Promise.all([
+    const [casesRes, ordersRes, adminsRes, actionsRes, workflowRes] = await Promise.all([
       supabase.from("dispute_cases").select("*, order:orders(id, order_number, status, total, created_at), store:stores(id, name, slug, status), buyer:profiles(id, full_name, email)").order("created_at", { ascending: false }),
       supabase.from("orders").select("id, order_number, status, total, created_at, buyer_id, store_id, buyer:profiles(id, full_name, email), store:stores(id, name, slug, status)").order("created_at", { ascending: false }).limit(150),
       supabase.from("profiles").select("id, full_name, email").eq("role", "admin").order("full_name", { ascending: true }),
       supabase.from("admin_actions").select("*, admin:profiles(id, full_name, email)").eq("entity_type", "dispute_case").order("created_at", { ascending: false }).limit(200),
+      supabase.from("dispute_cases").select("id, refund_decision, payout_hold_status").limit(1),
     ]);
 
     if (casesRes.error) {
@@ -158,6 +167,10 @@ export default function AdminDisputesPage() {
       setError(firstFollowupError.message);
       setLoading(false);
       return;
+    }
+
+    if (workflowRes.error && isMissingDisputeWorkflowColumns(workflowRes.error.message)) {
+      setWorkflowMigrationRequired(true);
     }
 
     const nextCases = ((casesRes.data ?? []) as Partial<DisputeCaseRecord>[]).map(normalizeDisputeCase);
@@ -277,18 +290,23 @@ export default function AdminDisputesPage() {
     const supabase = getSupabaseBrowserClient();
     const nextResolvedAt = ["resolved", "dismissed"].includes(selectedCase.status) ? new Date().toISOString() : null;
     const nextRefundDecidedAt = selectedCase.refund_decision === "under_review" ? null : new Date().toISOString();
-    const { error: updateError } = await supabase.from("dispute_cases").update({
+    const updatePayload = {
       status: selectedCase.status,
       admin_notes: selectedCase.admin_notes?.trim() || null,
       resolution: selectedCase.resolution?.trim() || null,
       refund_amount: selectedCase.refund_amount ? Number(selectedCase.refund_amount) : null,
-      refund_decision: selectedCase.refund_decision,
-      refund_decided_at: nextRefundDecidedAt,
-      payout_hold_status: selectedCase.payout_hold_status,
-      payout_hold_reason: selectedCase.payout_hold_reason?.trim() || null,
       resolved_at: nextResolvedAt,
       assigned_admin_id: selectedCase.assigned_admin_id || adminId,
-    }).eq("id", selectedCase.id);
+      ...(workflowMigrationRequired
+        ? {}
+        : {
+            refund_decision: selectedCase.refund_decision,
+            refund_decided_at: nextRefundDecidedAt,
+            payout_hold_status: selectedCase.payout_hold_status,
+            payout_hold_reason: selectedCase.payout_hold_reason?.trim() || null,
+          }),
+    };
+    const { error: updateError } = await supabase.from("dispute_cases").update(updatePayload).eq("id", selectedCase.id);
 
     if (updateError) {
       addToast({ type: "error", title: "Case update failed", description: updateError.message });
@@ -341,6 +359,7 @@ export default function AdminDisputesPage() {
       </div>
 
       {migrationRequired && <Card className="border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-900/10 dark:text-amber-200">The dispute workflow needs the governance SQL migration before it can run. Apply <code>supabase-governance-foundation.sql</code> and reload this page.</Card>}
+      {workflowMigrationRequired && <Card className="border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-900/10 dark:text-amber-200">The dispute foundation is available, but advanced refund decision and payout-hold fields need <code>supabase-governance-workflows.sql</code> before those controls can save.</Card>}
 
       <div className="flex items-center gap-1">
         {[{ label: "Existing cases", value: "cases" as const }, { label: "Open new case", value: "new_case" as const }].map((entry) => (
@@ -415,9 +434,9 @@ export default function AdminDisputesPage() {
                     <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Case status<select value={selectedCase.status} onChange={(event) => patchSelectedCase({ status: event.target.value as DisputeStatus })} className="h-10 border border-stone-200 bg-transparent px-3 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200">{editableStatuses.map((entry) => <option key={entry} value={entry}>{entry.replaceAll("_", " ")}</option>)}</select></label>
                     <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Assigned admin<select value={selectedCase.assigned_admin_id ?? ""} onChange={(event) => patchSelectedCase({ assigned_admin_id: event.target.value || null })} className="h-10 border border-stone-200 bg-transparent px-3 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200"><option value="">Unassigned</option>{admins.map((admin) => <option key={admin.id} value={admin.id}>{admin.full_name || admin.email}</option>)}</select></label>
                     <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Refund amount<input type="number" min="0" step="0.01" value={selectedCase.refund_amount ?? ""} onChange={(event) => patchSelectedCase({ refund_amount: event.target.value ? Number(event.target.value) : null })} className="h-10 border border-stone-200 bg-transparent px-3 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200" /></label>
-                    <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Refund decision<select value={selectedCase.refund_decision} onChange={(event) => patchSelectedCase({ refund_decision: event.target.value as RefundDecision })} className="h-10 border border-stone-200 bg-transparent px-3 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200">{refundDecisionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-                    <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Payout hold<select value={selectedCase.payout_hold_status} onChange={(event) => patchSelectedCase({ payout_hold_status: event.target.value as PayoutHoldStatus })} className="h-10 border border-stone-200 bg-transparent px-3 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200">{payoutHoldOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-                    <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Payout hold reason<textarea rows={3} value={selectedCase.payout_hold_reason ?? ""} onChange={(event) => patchSelectedCase({ payout_hold_reason: event.target.value })} className="border border-stone-200 bg-transparent px-3 py-2 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200" /></label>
+                    <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Refund decision<select disabled={workflowMigrationRequired} value={selectedCase.refund_decision} onChange={(event) => patchSelectedCase({ refund_decision: event.target.value as RefundDecision })} className="h-10 border border-stone-200 bg-transparent px-3 text-sm font-normal text-stone-700 disabled:cursor-not-allowed disabled:opacity-60 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200">{refundDecisionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                    <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Payout hold<select disabled={workflowMigrationRequired} value={selectedCase.payout_hold_status} onChange={(event) => patchSelectedCase({ payout_hold_status: event.target.value as PayoutHoldStatus })} className="h-10 border border-stone-200 bg-transparent px-3 text-sm font-normal text-stone-700 disabled:cursor-not-allowed disabled:opacity-60 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200">{payoutHoldOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                    <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Payout hold reason<textarea disabled={workflowMigrationRequired} rows={3} value={selectedCase.payout_hold_reason ?? ""} onChange={(event) => patchSelectedCase({ payout_hold_reason: event.target.value })} className="border border-stone-200 bg-transparent px-3 py-2 text-sm font-normal text-stone-700 disabled:cursor-not-allowed disabled:opacity-60 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200" /></label>
                     <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Admin notes<textarea rows={4} value={selectedCase.admin_notes ?? ""} onChange={(event) => patchSelectedCase({ admin_notes: event.target.value })} className="border border-stone-200 bg-transparent px-3 py-2 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200" /></label>
                     <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Resolution notes<textarea rows={3} value={selectedCase.resolution ?? ""} onChange={(event) => patchSelectedCase({ resolution: event.target.value })} className="border border-stone-200 bg-transparent px-3 py-2 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200" /></label>
                   </div>

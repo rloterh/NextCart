@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { AlertTriangle, DollarSign, EyeOff, Package, Scale, ShieldAlert, ShoppingCart, Store, TrendingUp, Users } from "lucide-react";
+import { AlertTriangle, Clock3, DollarSign, EyeOff, Package, Scale, ShieldAlert, ShoppingCart, Store, TrendingUp, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { getDisputeSlaState, isActiveDispute } from "@/lib/admin/governance";
 import { isExceptionStatus, isReturnStatus } from "@/lib/orders/operations-metrics";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatPrice } from "@/lib/utils/constants";
@@ -13,6 +15,13 @@ import type { Store as StoreType } from "@/types";
 
 type AdminOrderSummary = Pick<Order, "total" | "status" | "store_id" | "stripe_transfer_status">;
 type AdminStoreSummary = Pick<StoreType, "id" | "name" | "slug" | "status">;
+type AdminDisputeSummary = {
+  id: string;
+  status: "open" | "investigating" | "vendor_action_required" | "refund_pending" | "resolved" | "dismissed";
+  priority: "low" | "medium" | "high" | "critical";
+  created_at: string;
+  assigned_admin_id: string | null;
+};
 
 interface RiskQueueItem {
   storeId: string;
@@ -37,12 +46,18 @@ export default function AdminDashboard() {
     hiddenReviews: 0,
     openDisputes: 0,
     suspendedVendors: 0,
+    disputeSlaBreaches: 0,
+    disputeSlaAtRisk: 0,
+    unassignedDisputes: 0,
   });
   const [riskQueue, setRiskQueue] = useState<RiskQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetch() {
+      setLoading(true);
+      setError(null);
       const sb = getSupabaseBrowserClient();
       const [usersRes, storesRes, pendingRes, productsRes, ordersRes, hiddenReviewsRes, disputesRes] = await Promise.all([
         sb.from("profiles").select("*", { count: "exact", head: true }),
@@ -51,11 +66,33 @@ export default function AdminDashboard() {
         sb.from("products").select("*", { count: "exact", head: true }).eq("status", "active"),
         sb.from("orders").select("total, status, store_id, stripe_transfer_status"),
         sb.from("reviews").select("*", { count: "exact", head: true }).eq("is_visible", false),
-        sb.from("dispute_cases").select("*", { count: "exact", head: true }).in("status", ["open", "investigating", "vendor_action_required", "refund_pending"]),
+        sb.from("dispute_cases").select("id, status, priority, created_at, assigned_admin_id"),
       ]);
+
+      const firstError = [
+        usersRes.error,
+        storesRes.error,
+        pendingRes.error,
+        productsRes.error,
+        ordersRes.error,
+        hiddenReviewsRes.error,
+        disputesRes.error,
+      ].find(Boolean);
+
+      if (firstError) {
+        setError(firstError.message);
+        setRiskQueue([]);
+        setLoading(false);
+        return;
+      }
 
       const orders = (ordersRes.data ?? []) as AdminOrderSummary[];
       const stores = (storesRes.data ?? []) as AdminStoreSummary[];
+      const disputes = (disputesRes.data ?? []) as AdminDisputeSummary[];
+      const activeDisputes = disputes.filter((dispute) => isActiveDispute(dispute.status));
+      const disputeSlaBreaches = activeDisputes.filter((dispute) => getDisputeSlaState(dispute.created_at, dispute.priority, dispute.status).tone === "danger").length;
+      const disputeSlaAtRisk = activeDisputes.filter((dispute) => getDisputeSlaState(dispute.created_at, dispute.priority, dispute.status).tone === "warning").length;
+      const unassignedDisputes = activeDisputes.filter((dispute) => !dispute.assigned_admin_id).length;
       const revenue = orders.filter((order) => order.status === "delivered").reduce((sum, order) => sum + Number(order.total), 0);
       const exceptionOrders = orders.filter((order) => isExceptionStatus(order.status)).length;
       const unresolvedReturns = orders.filter((order) => isReturnStatus(order.status) && order.status !== "refunded").length;
@@ -101,8 +138,11 @@ export default function AdminDashboard() {
         unresolvedReturns,
         payoutAlerts,
         hiddenReviews: hiddenReviewsRes.count ?? 0,
-        openDisputes: disputesRes.count ?? 0,
+        openDisputes: activeDisputes.length,
         suspendedVendors: stores.filter((store) => store.status === "suspended").length,
+        disputeSlaBreaches,
+        disputeSlaAtRisk,
+        unassignedDisputes,
       });
       setRiskQueue(
         [...riskMap.values()]
@@ -128,15 +168,32 @@ export default function AdminDashboard() {
   const riskCards = [
     { label: "Exception orders", value: stats.exceptionOrders, detail: "delivery failures and return flows", icon: AlertTriangle },
     { label: "Unresolved returns", value: stats.unresolvedReturns, detail: "return flows still open", icon: ShieldAlert },
+    { label: "SLA breaches", value: stats.disputeSlaBreaches, detail: "disputes already outside target handling windows", icon: Clock3 },
     { label: "Payout alerts", value: stats.payoutAlerts, detail: "delivered orders not yet settled", icon: DollarSign },
   ];
   const governanceCards = [
     { label: "Open disputes", value: stats.openDisputes, detail: "cases needing investigation or refund action", icon: Scale, href: "/admin/disputes" },
+    { label: "Cases at risk", value: stats.disputeSlaAtRisk, detail: "disputes close to missing their SLA", icon: Clock3, href: "/admin/disputes" },
+    { label: "Unassigned cases", value: stats.unassignedDisputes, detail: "active cases still waiting for an owner", icon: ShieldAlert, href: "/admin/disputes" },
     { label: "Hidden reviews", value: stats.hiddenReviews, detail: "reviews removed from buyer-facing visibility", icon: EyeOff, href: "/admin/moderation" },
     { label: "Suspended vendors", value: stats.suspendedVendors, detail: "stores currently restricted from trading", icon: Store, href: "/admin/vendors" },
   ];
 
   if (loading) return <div className="grid gap-4 sm:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-28 animate-pulse bg-stone-100 dark:bg-stone-800" />)}</div>;
+  if (error) {
+    return (
+      <Card className="space-y-4 p-5">
+        <div>
+          <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Platform overview</h1>
+          <p className="mt-1 text-sm text-stone-500">We could not load the latest governance overview right now.</p>
+        </div>
+        <p className="text-sm text-red-600 dark:text-red-300">{error}</p>
+        <Button size="sm" onClick={() => window.location.reload()}>
+          Retry overview
+        </Button>
+      </Card>
+    );
+  }
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
@@ -222,7 +279,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-5">
         {governanceCards.map((card) => (
           <Link key={card.label} href={card.href}>
             <Card className="p-5 transition-colors hover:bg-stone-50 dark:hover:bg-stone-900/80">
