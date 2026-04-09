@@ -5,11 +5,13 @@ import Link from "next/link";
 import { AlertTriangle, Clock3, DollarSign, EyeOff, Package, Scale, ShieldAlert, ShoppingCart, Store, TrendingUp, Users } from "lucide-react";
 import { EventScaffoldPanel } from "@/components/platform/event-scaffold-panel";
 import { LaunchReadinessPanel } from "@/components/platform/launch-readiness-panel";
+import { PlatformInboxPanel } from "@/components/platform/platform-inbox-panel";
 import { Card } from "@/components/ui/card";
 import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { usePlatformReadiness } from "@/hooks/use-platform-readiness";
 import { getDisputeSlaState, isActiveDispute } from "@/lib/admin/governance";
+import { getDisputeEscalationMessage, getModerationEscalationMessage } from "@/lib/platform/notifications";
 import { isExceptionStatus, isReturnStatus } from "@/lib/orders/operations-metrics";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatPrice } from "@/lib/utils/constants";
@@ -187,6 +189,15 @@ export default function AdminDashboard() {
     { label: "Hidden reviews", value: stats.hiddenReviews, detail: "reviews removed from buyer-facing visibility", icon: EyeOff, href: "/admin/moderation" },
     { label: "Suspended vendors", value: stats.suspendedVendors, detail: "stores currently restricted from trading", icon: Store, href: "/admin/vendors" },
   ];
+  const disputeEscalation = getDisputeEscalationMessage({
+    breaches: stats.disputeSlaBreaches,
+    atRisk: stats.disputeSlaAtRisk,
+    unassigned: stats.unassignedDisputes,
+  });
+  const moderationEscalation = getModerationEscalationMessage({
+    hiddenReviews: stats.hiddenReviews,
+    pendingVendors: stats.pendingVendors,
+  });
 
   if (loading) {
     return (
@@ -320,7 +331,41 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      {disputeEscalation || moderationEscalation ? (
+        <div className="grid gap-4 xl:grid-cols-2">
+          {disputeEscalation ? (
+            <StatePanel
+              title={disputeEscalation.title}
+              description={disputeEscalation.description}
+              tone={disputeEscalation.tone}
+              actionLabel="Review disputes"
+              onAction={() => {
+                window.location.href = "/admin/disputes";
+              }}
+            />
+          ) : null}
+          {moderationEscalation ? (
+            <StatePanel
+              title={moderationEscalation.title}
+              description={moderationEscalation.description}
+              tone={moderationEscalation.tone}
+              actionLabel="Open moderation"
+              onAction={() => {
+                window.location.href = "/admin/moderation";
+              }}
+            />
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        <PlatformInboxPanel
+          title="Governance inbox"
+          description="Operational events that need review, assignment, or escalation before trust issues spread."
+          emptyTitle="Governance inbox is clear"
+          emptyDescription="Disputes, moderation actions, and settlement alerts will appear here when intervention is needed."
+        />
+
         <LaunchReadinessPanel
           title="Platform launch controls"
           description="Track configuration health for checkout, payouts, content, and privileged governance workflows before issues reach customers or operators."
@@ -333,7 +378,7 @@ export default function AdminDashboard() {
 
         <EventScaffoldPanel
           title="Automation and notification groundwork"
-          description="These marketplace events now have shared definitions so operations, escalation, and later delivery channels can build on stable boundaries."
+          description="These marketplace events now feed the in-app inbox and share email-ready boundaries for future delivery automation."
           audience="admin"
           events={readinessData?.events ?? []}
           loading={readinessLoading}

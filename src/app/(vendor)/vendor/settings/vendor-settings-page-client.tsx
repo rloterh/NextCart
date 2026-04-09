@@ -4,12 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, ArrowUpRight, CreditCard, ShieldCheck, Store, Wallet } from "lucide-react";
 import { EventScaffoldPanel } from "@/components/platform/event-scaffold-panel";
 import { LaunchReadinessPanel } from "@/components/platform/launch-readiness-panel";
+import { PlatformInboxPanel } from "@/components/platform/platform-inbox-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useAuth } from "@/hooks/use-auth";
+import { getPayoutEscalationMessage } from "@/lib/platform/notifications";
 import { usePlatformReadiness } from "@/hooks/use-platform-readiness";
 import { getPayoutAnomaly, getPayoutState } from "@/lib/orders/payout-state";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -295,6 +297,10 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
     ]
   );
   const checklistCompleteCount = launchChecklist.filter((item) => item.complete).length;
+  const payoutEscalation = getPayoutEscalationMessage({
+    anomalyCount: payoutAudit?.anomalyCount ?? 0,
+    outstandingSettlements: payoutAudit?.outstandingSettlements ?? 0,
+  });
 
   function updateField<Key extends keyof StoreSettingsFormState>(key: Key, value: StoreSettingsFormState[Key]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -583,6 +589,14 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
             </div>
           </Card>
 
+          {payoutEscalation ? (
+            <StatePanel
+              title={payoutEscalation.title}
+              description={payoutEscalation.description}
+              tone={payoutEscalation.tone}
+            />
+          ) : null}
+
           <Card>
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -836,9 +850,16 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
             onRetry={() => void refetchReadiness()}
           />
 
+          <PlatformInboxPanel
+            title="Operations inbox"
+            description="Quiet event follow-up for order exceptions, dispute changes, moderation outcomes, and settlement updates."
+            emptyTitle="Your operations inbox is clear"
+            emptyDescription="As your store sees payout, dispute, or moderation activity, the next steps will appear here."
+          />
+
           <EventScaffoldPanel
             title="Marketplace event coverage"
-            description="These event flows are already modeled so future in-app and email delivery can expand cleanly without rewriting store operations."
+            description="These event flows now power the in-app inbox and share email-ready boundaries for future delivery automation."
             audience="vendor"
             events={readinessData?.events ?? []}
             loading={readinessLoading}
