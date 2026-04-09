@@ -28,6 +28,7 @@ function readServerEnv() {
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     NOTIFICATION_FROM_EMAIL: process.env.NOTIFICATION_FROM_EMAIL,
+    PLATFORM_AUTOMATION_SECRET: process.env.PLATFORM_AUTOMATION_SECRET,
   } satisfies Record<string, string | undefined>;
 }
 

@@ -82,6 +82,14 @@ export const PLATFORM_CAPABILITY_DEFINITIONS: PlatformCapabilityDefinition[] = [
     requiredEnv: ["RESEND_API_KEY", "NOTIFICATION_FROM_EMAIL"],
     audience: ["vendor", "admin"],
   },
+  {
+    id: "scheduled_automation",
+    label: "Scheduled automation",
+    description: "Secret-backed automation triggers for recurring digests, stale-work reminders, and governance handoff jobs.",
+    requiredEnv: [],
+    optionalEnv: ["PLATFORM_AUTOMATION_SECRET"],
+    audience: ["vendor", "admin"],
+  },
 ];
 
 export const PLATFORM_EVENT_DEFINITIONS: PlatformEventDefinition[] = [

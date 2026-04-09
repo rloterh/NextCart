@@ -9,7 +9,8 @@ export type PlatformCapabilityId =
   | "stripe_checkout"
   | "stripe_vendor_payouts"
   | "stripe_webhooks"
-  | "notification_delivery";
+  | "notification_delivery"
+  | "scheduled_automation";
 
 export interface PlatformCapabilityCheck {
   id: PlatformCapabilityId;
@@ -119,4 +120,62 @@ export interface PlatformDigestPayload {
   sections: PlatformDigestSection[];
   inboxPreview: PlatformInboxItem[];
   emailDeliveryAvailable: boolean;
+}
+
+export type PlatformOperatorAudience = Exclude<PlatformAudience, "buyer">;
+export type PlatformAutomationJobKey =
+  | "delay_digest"
+  | "stale_dispute_reminder"
+  | "payout_lag_followup"
+  | "moderation_backlog_reminder";
+export type PlatformAutomationDeliveryMode = "preview" | "email_ready" | "email_disabled";
+export type PlatformExportKind =
+  | "vendor_payout_review"
+  | "admin_payout_review"
+  | "dispute_queue"
+  | "moderation_backlog";
+export type PlatformExportFormat = "csv" | "json";
+
+export interface PlatformAutomationSignal {
+  id: string;
+  label: string;
+  value: number;
+  description: string;
+  tone: PlatformNotificationTone;
+}
+
+export interface PlatformAutomationJob {
+  key: PlatformAutomationJobKey;
+  label: string;
+  description: string;
+  itemsAffected: number;
+  deliveryMode: PlatformAutomationDeliveryMode;
+}
+
+export interface PlatformExportDefinition {
+  kind: PlatformExportKind;
+  label: string;
+  description: string;
+  formats: PlatformExportFormat[];
+  href: string;
+}
+
+export interface PlatformAutomationPayload {
+  audience: PlatformOperatorAudience;
+  summary: string;
+  signals: PlatformAutomationSignal[];
+  jobs: PlatformAutomationJob[];
+  exports: PlatformExportDefinition[];
+  emailDeliveryAvailable: boolean;
+  automationSecretConfigured: boolean;
+  generatedAt: string;
+}
+
+export interface PlatformAutomationRunPayload {
+  jobKey: PlatformAutomationJobKey;
+  completedAt: string;
+  itemsAffected: number;
+  deliveryMode: PlatformAutomationDeliveryMode;
+  summary: string;
+  nextAction: string;
 }
