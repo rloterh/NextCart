@@ -34,14 +34,17 @@ export function DelayDigestPanel({
   const addToast = useUIStore((state) => state.addToast);
   const { data, loading, error, refetch, sendDigest, sending } = usePlatformDigest(true);
 
-  async function handleSendDigest() {
-    const ok = await sendDigest();
+  async function handleSendDigest(scope: "self" | "policy") {
+    const recipientCount = await sendDigest(scope);
 
-    if (ok) {
+    if (recipientCount) {
       addToast({
         type: "success",
         title: "Digest emailed",
-        description: "The latest operational digest was sent to your account email.",
+        description:
+          scope === "policy"
+            ? `The latest operational digest was sent to ${recipientCount} policy recipient(s).`
+            : "The latest operational digest was sent to your account email.",
       });
     } else {
       addToast({
@@ -85,18 +88,35 @@ export function DelayDigestPanel({
         <>
           <div className="border border-stone-200 p-4 dark:border-stone-800">
             <p className="text-sm leading-relaxed text-stone-500">{data.summary}</p>
+            <p className="mt-3 text-xs leading-relaxed text-stone-500">
+              {data.deliveryPolicy.summary}
+            </p>
             <div className="mt-4">
-              <Button
-                type="button"
-                size="sm"
-                variant={data.emailDeliveryAvailable ? "outline" : "ghost"}
-                leftIcon={<Mail className="h-3.5 w-3.5" />}
-                isLoading={sending}
-                disabled={!data.emailDeliveryAvailable}
-                onClick={() => void handleSendDigest()}
-              >
-                {data.emailDeliveryAvailable ? "Email latest digest" : "Email delivery not ready"}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={data.emailDeliveryAvailable ? "outline" : "ghost"}
+                  leftIcon={<Mail className="h-3.5 w-3.5" />}
+                  isLoading={sending}
+                  disabled={!data.emailDeliveryAvailable}
+                  onClick={() => void handleSendDigest("self")}
+                >
+                  {data.emailDeliveryAvailable ? "Email me" : "Email delivery not ready"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  isLoading={sending}
+                  disabled={!data.emailDeliveryAvailable || data.deliveryPolicy.recipients.length === 0}
+                  onClick={() => void handleSendDigest("policy")}
+                >
+                  {data.deliveryPolicy.recipients.length > 0
+                    ? `Email ${data.deliveryPolicy.label.toLowerCase()}`
+                    : "No policy recipients"}
+                </Button>
+              </div>
             </div>
           </div>
 

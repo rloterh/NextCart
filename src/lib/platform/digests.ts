@@ -1,4 +1,10 @@
-import type { PlatformDigestPayload, PlatformDigestSection, PlatformInboxItem, PlatformNotificationTone } from "@/types/platform";
+import type {
+  PlatformDigestDeliveryPolicy,
+  PlatformDigestPayload,
+  PlatformDigestSection,
+  PlatformInboxItem,
+  PlatformNotificationTone,
+} from "@/types/platform";
 
 function createSection(
   id: string,
@@ -25,6 +31,7 @@ export function createVendorDigest({
   unreadInbox,
   inboxPreview,
   emailDeliveryAvailable,
+  deliveryPolicy,
 }: {
   storeName: string;
   exceptionOrders: number;
@@ -34,6 +41,7 @@ export function createVendorDigest({
   unreadInbox: number;
   inboxPreview: PlatformInboxItem[];
   emailDeliveryAvailable: boolean;
+  deliveryPolicy: PlatformDigestDeliveryPolicy;
 }): PlatformDigestPayload {
   const sections = [
     createSection(
@@ -85,6 +93,7 @@ export function createVendorDigest({
     sections,
     inboxPreview,
     emailDeliveryAvailable,
+    deliveryPolicy,
   };
 }
 
@@ -97,6 +106,7 @@ export function createAdminDigest({
   unreadInbox,
   inboxPreview,
   emailDeliveryAvailable,
+  deliveryPolicy,
 }: {
   openDisputes: number;
   slaBreaches: number;
@@ -106,6 +116,7 @@ export function createAdminDigest({
   unreadInbox: number;
   inboxPreview: PlatformInboxItem[];
   emailDeliveryAvailable: boolean;
+  deliveryPolicy: PlatformDigestDeliveryPolicy;
 }): PlatformDigestPayload {
   const sections = [
     createSection(
@@ -164,5 +175,6 @@ export function createAdminDigest({
     sections,
     inboxPreview,
     emailDeliveryAvailable,
+    deliveryPolicy,
   };
 }

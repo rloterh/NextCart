@@ -41,22 +41,28 @@ export function usePlatformDigest(enabled = true) {
     void fetchDigest();
   }, [fetchDigest]);
 
-  const sendDigest = useCallback(async () => {
+  const sendDigest = useCallback(async (scope: "self" | "policy" = "self") => {
     setSending(true);
     setError(null);
 
     try {
-      const response = await fetch("/api/platform/digest", { method: "POST" });
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      const response = await fetch("/api/platform/digest", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ scope }),
+      });
+      const payload = (await response.json().catch(() => null)) as { error?: string; recipientCount?: number } | null;
 
       if (!response.ok) {
         throw new Error(payload?.error ?? "Unable to send digest");
       }
 
-      return true;
+      return payload?.recipientCount ?? 1;
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : "Unable to send digest");
-      return false;
+      return null;
     } finally {
       setSending(false);
     }

@@ -113,6 +113,13 @@ export interface PlatformDigestSection {
   tone: PlatformNotificationTone;
 }
 
+export interface PlatformDigestDeliveryPolicy {
+  mode: "self" | "policy";
+  label: string;
+  summary: string;
+  recipients: string[];
+}
+
 export interface PlatformDigestPayload {
   audience: Exclude<PlatformAudience, "buyer">;
   title: string;
@@ -120,6 +127,7 @@ export interface PlatformDigestPayload {
   sections: PlatformDigestSection[];
   inboxPreview: PlatformInboxItem[];
   emailDeliveryAvailable: boolean;
+  deliveryPolicy: PlatformDigestDeliveryPolicy;
 }
 
 export type PlatformOperatorAudience = Exclude<PlatformAudience, "buyer">;
@@ -158,6 +166,11 @@ export interface PlatformExportDefinition {
   description: string;
   formats: PlatformExportFormat[];
   href: string;
+  presets?: Array<{
+    label: string;
+    description: string;
+    href: string;
+  }>;
 }
 
 export interface PlatformAutomationPayload {
