@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, ArrowUpRight, CreditCard, RefreshCcw, ShieldCheck, Store, Wallet } from "lucide-react";
+import { AlertCircle, ArrowUpRight, CreditCard, ShieldCheck, Store, Wallet } from "lucide-react";
+import { EventScaffoldPanel } from "@/components/platform/event-scaffold-panel";
+import { LaunchReadinessPanel } from "@/components/platform/launch-readiness-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useAuth } from "@/hooks/use-auth";
+import { usePlatformReadiness } from "@/hooks/use-platform-readiness";
 import { getPayoutAnomaly, getPayoutState } from "@/lib/orders/payout-state";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatPrice, slugify } from "@/lib/utils/constants";
@@ -83,6 +86,12 @@ function TemplateField({ label, value, helper, placeholder, onChange }: Template
 export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClientProps) {
   const { store, user, refreshProfile, isLoading: authLoading } = useAuth();
   const addToast = useUIStore((state) => state.addToast);
+  const {
+    data: readinessData,
+    loading: readinessLoading,
+    error: readinessError,
+    refetch: refetchReadiness,
+  } = usePlatformReadiness();
   const [form, setForm] = useState<StoreSettingsFormState>({
     name: "",
     slug: "",
@@ -237,6 +246,55 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
       description: "Stripe is attached to the store, and marketplace approval will finish the activation path.",
     };
   }, [store?.status, store?.stripe_account_id]);
+
+  const launchChecklist = useMemo(
+    () => [
+      {
+        label: "Editorial story",
+        complete: Boolean(form.description.trim() && form.storyHeadline.trim()),
+        detail: "Store description and story headline help buyers understand what makes this storefront distinctive.",
+      },
+      {
+        label: "Support and policies",
+        complete: Boolean(form.supportEmail.trim() && form.shippingNote.trim() && form.returnsPolicy.trim()),
+        detail: "Support email, shipping note, and returns guidance should all be present before launch.",
+      },
+      {
+        label: "Brand media",
+        complete: Boolean(form.logoUrl.trim() && form.bannerUrl.trim()),
+        detail: "Logo and banner media strengthen vendor trust surfaces and merchandising modules.",
+      },
+      {
+        label: "Payout activation",
+        complete: Boolean(store?.stripe_account_id && store.status === "approved"),
+        detail: "Stripe onboarding and marketplace approval should both be complete before accepting live orders.",
+      },
+      {
+        label: "Recovery templates",
+        complete: Boolean(
+          form.reshipTemplate.trim() &&
+            form.returnInitiatedTemplate.trim() &&
+            form.returnApprovedTemplate.trim()
+        ),
+        detail: "Recovery templates keep reship and return messaging consistent when orders hit exceptions.",
+      },
+    ],
+    [
+      form.bannerUrl,
+      form.description,
+      form.logoUrl,
+      form.reshipTemplate,
+      form.returnApprovedTemplate,
+      form.returnInitiatedTemplate,
+      form.returnsPolicy,
+      form.shippingNote,
+      form.storyHeadline,
+      form.supportEmail,
+      store?.status,
+      store?.stripe_account_id,
+    ]
+  );
+  const checklistCompleteCount = launchChecklist.filter((item) => item.complete).length;
 
   function updateField<Key extends keyof StoreSettingsFormState>(key: Key, value: StoreSettingsFormState[Key]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -737,29 +795,56 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
 
           <Card>
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-full bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300">
-                <RefreshCcw className="h-4 w-4" />
-              </div>
+              <AlertCircle className="mt-0.5 h-5 w-5 text-amber-600 dark:text-amber-400" />
               <div>
-                <h2 className="text-sm font-medium text-stone-900 dark:text-white">Operational notes</h2>
-                <ul className="mt-3 space-y-2 text-sm text-stone-500">
-                  <li>Keep support details current so order issues route to the right inbox quickly.</li>
-                  <li>Use the Stripe dashboard to verify payouts, review onboarding requirements, and inspect payment events.</li>
-                  <li>When your store status is pending, admins can still review the profile and payout readiness before approval.</li>
-                </ul>
+                <h2 className="text-sm font-medium text-stone-900 dark:text-white">Store launch checklist</h2>
+                <p className="mt-2 text-sm text-stone-500">
+                  {checklistCompleteCount} of {launchChecklist.length} launch-critical areas are complete for this storefront.
+                </p>
+                <div className="mt-4 space-y-3">
+                  {launchChecklist.map((item) => (
+                    <div key={item.label} className="border border-stone-200 p-3 text-sm dark:border-stone-800">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-stone-900 dark:text-white">{item.label}</p>
+                          <p className="mt-1 text-xs leading-relaxed text-stone-500">{item.detail}</p>
+                        </div>
+                        <span
+                          className={`inline-flex px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${
+                            item.complete
+                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300"
+                              : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
+                          }`}
+                        >
+                          {item.complete ? "Ready" : "Needs work"}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </Card>
 
-          <Card>
-            <div className="flex items-start gap-3">
-              <AlertCircle className="mt-0.5 h-5 w-5 text-amber-600 dark:text-amber-400" />
-              <div>
-                <h2 className="text-sm font-medium text-stone-900 dark:text-white">Publishing reminder</h2>
-                <p className="mt-2 text-sm text-stone-500">Buyers see stronger conversion when your store description, hero media, shipping note, and payout onboarding are all complete before launch.</p>
-              </div>
-            </div>
-          </Card>
+          <LaunchReadinessPanel
+            title="Operational platform readiness"
+            description="Configuration health for payments, payouts, content, and privileged workflows that affect your store launch."
+            audience="vendor"
+            checks={readinessData?.checks ?? []}
+            loading={readinessLoading}
+            error={readinessError}
+            onRetry={() => void refetchReadiness()}
+          />
+
+          <EventScaffoldPanel
+            title="Marketplace event coverage"
+            description="These event flows are already modeled so future in-app and email delivery can expand cleanly without rewriting store operations."
+            audience="vendor"
+            events={readinessData?.events ?? []}
+            loading={readinessLoading}
+            error={readinessError}
+            onRetry={() => void refetchReadiness()}
+          />
         </div>
       </div>
     </PageTransition>

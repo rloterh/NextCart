@@ -3,9 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Clock3, DollarSign, EyeOff, Package, Scale, ShieldAlert, ShoppingCart, Store, TrendingUp, Users } from "lucide-react";
+import { EventScaffoldPanel } from "@/components/platform/event-scaffold-panel";
+import { LaunchReadinessPanel } from "@/components/platform/launch-readiness-panel";
 import { Card } from "@/components/ui/card";
 import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
+import { usePlatformReadiness } from "@/hooks/use-platform-readiness";
 import { getDisputeSlaState, isActiveDispute } from "@/lib/admin/governance";
 import { isExceptionStatus, isReturnStatus } from "@/lib/orders/operations-metrics";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -33,6 +36,12 @@ interface RiskQueueItem {
 }
 
 export default function AdminDashboard() {
+  const {
+    data: readinessData,
+    loading: readinessLoading,
+    error: readinessError,
+    refetch: refetchReadiness,
+  } = usePlatformReadiness();
   const [stats, setStats] = useState({
     users: 0,
     vendors: 0,
@@ -309,6 +318,28 @@ export default function AdminDashboard() {
             </Card>
           </Link>
         ))}
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <LaunchReadinessPanel
+          title="Platform launch controls"
+          description="Track configuration health for checkout, payouts, content, and privileged governance workflows before issues reach customers or operators."
+          audience="admin"
+          checks={readinessData?.checks ?? []}
+          loading={readinessLoading}
+          error={readinessError}
+          onRetry={() => void refetchReadiness()}
+        />
+
+        <EventScaffoldPanel
+          title="Automation and notification groundwork"
+          description="These marketplace events now have shared definitions so operations, escalation, and later delivery channels can build on stable boundaries."
+          audience="admin"
+          events={readinessData?.events ?? []}
+          loading={readinessLoading}
+          error={readinessError}
+          onRetry={() => void refetchReadiness()}
+        />
       </div>
     </PageTransition>
   );
