@@ -16,6 +16,7 @@ import { getPayoutAnomaly } from "@/lib/orders/payout-state";
 import { isExceptionStatus, isReturnStatus } from "@/lib/orders/operations-metrics";
 import { getSensitiveWorkflowReview } from "@/lib/platform/access-review";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { loadQueueTextPreference, saveQueuePreference } from "@/lib/ui/queue-preferences";
 import { formatDate, formatPrice } from "@/lib/utils/constants";
 import { useUIStore } from "@/stores/ui-store";
 import type { AdminAction, Category, Product, Profile, Store as StoreType, VendorStatus } from "@/types";
@@ -62,6 +63,8 @@ const queueTabs: Array<{ label: string; value: QueueFilter }> = [
   { label: "Reviews", value: "review" },
   { label: "Orders", value: "order" },
 ];
+
+const adminModerationSearchKey = "nexcart.admin.moderation.search";
 
 function isQueueFilter(value: string | null): value is QueueFilter {
   return value === "all" || value === "product" || value === "vendor" || value === "review" || value === "order";
@@ -156,6 +159,14 @@ export default function AdminModerationPage() {
   const [reviewCheckpointConfirmed, setReviewCheckpointConfirmed] = useState(false);
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [actionHistory, setActionHistory] = useState<Record<string, QueueHistoryAction[]>>({});
+
+  useEffect(() => {
+    setSearch(loadQueueTextPreference(adminModerationSearchKey));
+  }, []);
+
+  useEffect(() => {
+    saveQueuePreference(adminModerationSearchKey, search);
+  }, [search]);
 
   const fetchQueue = useCallback(async () => {
     setLoading(true);

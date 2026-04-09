@@ -13,6 +13,7 @@ import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { ProductRowActions } from "@/components/vendor/product-row-actions";
 import { useAuth } from "@/hooks/use-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { loadQueuePreference, loadQueueTextPreference, saveQueuePreference } from "@/lib/ui/queue-preferences";
 import { buildDuplicateSku, buildDuplicateSlug, getInventorySummary } from "@/lib/vendor/catalog";
 import { formatPrice } from "@/lib/utils/constants";
 import { useUIStore } from "@/stores/ui-store";
@@ -47,6 +48,14 @@ const bulkStatuses: Array<{ label: string; value: ProductStatus }> = [
   { label: "Archive selected", value: "archived" },
 ];
 
+const productViewKey = "nexcart.vendor.products.view";
+const productStatusKey = "nexcart.vendor.products.status";
+const productInventoryKey = "nexcart.vendor.products.inventory";
+const productSearchKey = "nexcart.vendor.products.search";
+const productViewValues = ["all", "inventory_risk", "draft_review", "variant_assortment", "active_catalog"] as const;
+const productStatusValues: ReadonlyArray<ProductStatus | "all"> = ["all", "active", "draft", "paused", "archived"];
+const productInventoryValues = ["all", "low_stock", "out_of_stock", "variant_managed", "base_only"] as const;
+
 async function ensureUniqueDuplicateSlug(storeId: string, baseName: string) {
   const supabase = getSupabaseBrowserClient();
 
@@ -80,17 +89,14 @@ export default function VendorProductsPage() {
   const [isBulkInventoryUpdating, setIsBulkInventoryUpdating] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const storedView = window.localStorage.getItem("nexcart.vendor.products.view") as ProductSavedView | null;
-    if (storedView && productViews.some((view) => view.value === storedView)) {
-      setSavedView(storedView);
-    }
+    setSavedView(loadQueuePreference(productViewKey, productViewValues, "all"));
+    setStatus(loadQueuePreference(productStatusKey, productStatusValues, "all"));
+    setInventoryFilter(loadQueuePreference(productInventoryKey, productInventoryValues, "all"));
+    setSearch(loadQueueTextPreference(productSearchKey));
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem("nexcart.vendor.products.view", savedView);
+    saveQueuePreference(productViewKey, savedView);
 
     if (savedView === "inventory_risk") {
       setStatus("all");
@@ -116,9 +122,25 @@ export default function VendorProductsPage() {
       return;
     }
 
-    setStatus("all");
-    setInventoryFilter("all");
+    setStatus(loadQueuePreference(productStatusKey, productStatusValues, "all"));
+    setInventoryFilter(loadQueuePreference(productInventoryKey, productInventoryValues, "all"));
   }, [savedView]);
+
+  useEffect(() => {
+    saveQueuePreference(productSearchKey, search);
+  }, [search]);
+
+  useEffect(() => {
+    if (savedView === "all") {
+      saveQueuePreference(productStatusKey, status);
+    }
+  }, [savedView, status]);
+
+  useEffect(() => {
+    if (savedView === "all") {
+      saveQueuePreference(productInventoryKey, inventoryFilter);
+    }
+  }, [inventoryFilter, savedView]);
 
   const fetchProducts = useCallback(async () => {
     if (!store) return;

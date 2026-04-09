@@ -10,6 +10,7 @@ import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { getPayoutAnomaly, getPayoutState } from "@/lib/orders/payout-state";
 import { isExceptionStatus, isReturnStatus } from "@/lib/orders/operations-metrics";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { loadQueueTextPreference, saveQueuePreference } from "@/lib/ui/queue-preferences";
 import { formatDate, formatPrice } from "@/lib/utils/constants";
 import type { OrderItem } from "@/types/orders";
 import type { Order } from "@/types/orders";
@@ -41,6 +42,8 @@ type AdminRiskOrder = Pick<
   store: Pick<Store, "id" | "name" | "slug" | "status"> | null;
   items: Pick<OrderItem, "id">[] | null;
 };
+
+const adminOrdersSearchKey = "nexcart.admin.orders.search";
 
 function isReviewFilter(value: string | null): value is ReviewFilter {
   return value === "all" || value === "exceptions" || value === "returns" || value === "payout_alerts";
@@ -97,6 +100,14 @@ export default function AdminOrdersPage() {
   const [filter, setFilter] = useState<ReviewFilter>("all");
   const [search, setSearch] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSearch(loadQueueTextPreference(adminOrdersSearchKey));
+  }, []);
+
+  useEffect(() => {
+    saveQueuePreference(adminOrdersSearchKey, search);
+  }, [search]);
 
   const fetchOrders = useCallback(async () => {
       setLoading(true);

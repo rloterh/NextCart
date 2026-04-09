@@ -9,6 +9,7 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { ProductStatusBadge, ToneBadge } from "@/components/ui/status-badge";
 import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
+import { loadQueuePreference, loadQueueTextPreference, saveQueuePreference } from "@/lib/ui/queue-preferences";
 import { useUIStore } from "@/stores/ui-store";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatDate, formatPrice } from "@/lib/utils/constants";
@@ -27,6 +28,10 @@ const moderationFilters: Array<{ label: string; value: ProductStatus | "all" }> 
   { label: "Archived", value: "archived" },
 ];
 
+const adminProductsFilterKey = "nexcart.admin.products.filter";
+const adminProductsSearchKey = "nexcart.admin.products.search";
+const adminProductFilterValues: ReadonlyArray<ProductStatus | "all"> = ["all", "active", "draft", "paused", "archived"];
+
 export default function AdminProductsPage() {
   const router = useRouter();
   const addToast = useUIStore((state) => state.addToast);
@@ -36,6 +41,19 @@ export default function AdminProductsPage() {
   const [filter, setFilter] = useState<ProductStatus | "all">("all");
   const [search, setSearch] = useState("");
   const [activeProductId, setActiveProductId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setFilter(loadQueuePreference(adminProductsFilterKey, adminProductFilterValues, "all"));
+    setSearch(loadQueueTextPreference(adminProductsSearchKey));
+  }, []);
+
+  useEffect(() => {
+    saveQueuePreference(adminProductsFilterKey, filter);
+  }, [filter]);
+
+  useEffect(() => {
+    saveQueuePreference(adminProductsSearchKey, search);
+  }, [search]);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);

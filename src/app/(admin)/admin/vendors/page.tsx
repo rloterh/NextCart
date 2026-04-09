@@ -11,6 +11,7 @@ import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useUIStore } from "@/stores/ui-store";
 import { isExceptionStatus, isReturnStatus } from "@/lib/orders/operations-metrics";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { loadQueuePreference, loadQueueTextPreference, saveQueuePreference } from "@/lib/ui/queue-preferences";
 import { formatDate } from "@/lib/utils/constants";
 import type { Order } from "@/types/orders";
 import type { Profile, Store as StoreType, VendorStatus } from "@/types";
@@ -33,6 +34,12 @@ const statusTabs: { label: string; value: VendorStatus | "all" }[] = [
   { label: "Suspended", value: "suspended" },
 ];
 
+const adminVendorsFilterKey = "nexcart.admin.vendors.filter";
+const adminVendorsRiskKey = "nexcart.admin.vendors.risk";
+const adminVendorsSearchKey = "nexcart.admin.vendors.search";
+const adminVendorFilterValues: ReadonlyArray<VendorStatus | "all"> = ["all", "pending", "approved", "rejected", "suspended"];
+const adminVendorRiskValues = ["all", "needs_review"] as const;
+
 export default function AdminVendorsPage() {
   const addToast = useUIStore((state) => state.addToast);
   const [stores, setStores] = useState<StoreRecord[]>([]);
@@ -42,6 +49,24 @@ export default function AdminVendorsPage() {
   const [search, setSearch] = useState("");
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
   const [riskMap, setRiskMap] = useState<Record<string, StoreRiskSummary>>({});
+
+  useEffect(() => {
+    setFilter(loadQueuePreference(adminVendorsFilterKey, adminVendorFilterValues, "pending"));
+    setRiskFilter(loadQueuePreference(adminVendorsRiskKey, adminVendorRiskValues, "all"));
+    setSearch(loadQueueTextPreference(adminVendorsSearchKey));
+  }, []);
+
+  useEffect(() => {
+    saveQueuePreference(adminVendorsFilterKey, filter);
+  }, [filter]);
+
+  useEffect(() => {
+    saveQueuePreference(adminVendorsRiskKey, riskFilter);
+  }, [riskFilter]);
+
+  useEffect(() => {
+    saveQueuePreference(adminVendorsSearchKey, search);
+  }, [search]);
 
   const fetchStores = useCallback(async () => {
     setLoading(true);

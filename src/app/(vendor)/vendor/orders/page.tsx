@@ -11,6 +11,7 @@ import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useAuth } from "@/hooks/use-auth";
 import { getPayoutState } from "@/lib/orders/payout-state";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { loadQueuePreference, loadQueueTextPreference, saveQueuePreference } from "@/lib/ui/queue-preferences";
 import { formatDate, formatPrice } from "@/lib/utils/constants";
 import type { Order, OrderItem } from "@/types/orders";
 import type { OrderStatus, Profile } from "@/types";
@@ -49,6 +50,10 @@ type VendorOrderListItem = Pick<Order, "id" | "order_number" | "status" | "creat
   items: Pick<OrderItem, "id">[];
 };
 
+const ordersViewKey = "nexcart.vendor.orders.view";
+const ordersStatusKey = "nexcart.vendor.orders.status";
+const ordersSearchKey = "nexcart.vendor.orders.search";
+
 export default function VendorOrdersPage() {
   const { store, isLoading: authLoading } = useAuth();
   const [orders, setOrders] = useState<VendorOrderListItem[]>([]);
@@ -59,18 +64,22 @@ export default function VendorOrdersPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const storedView = window.localStorage.getItem("nexcart.vendor.orders.view") as OrderSavedView | null;
-    if (storedView && savedViews.some((view) => view.value === storedView)) {
-      setSavedView(storedView);
-    }
+    setSavedView(loadQueuePreference(ordersViewKey, savedViews.map((view) => view.value), "all"));
+    setStatus(loadQueuePreference(ordersStatusKey, statuses, "all"));
+    setSearch(loadQueueTextPreference(ordersSearchKey));
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem("nexcart.vendor.orders.view", savedView);
+    saveQueuePreference(ordersViewKey, savedView);
   }, [savedView]);
+
+  useEffect(() => {
+    saveQueuePreference(ordersStatusKey, status);
+  }, [status]);
+
+  useEffect(() => {
+    saveQueuePreference(ordersSearchKey, search);
+  }, [search]);
 
   const fetchOrders = useCallback(async () => {
     if (!store) {
