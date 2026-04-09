@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createPlatformCapabilityErrorResponse } from "@/lib/platform/readiness.server";
 import { createDashboardLink } from "@/lib/stripe/server";
 import { getSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
 
@@ -24,6 +25,6 @@ export async function GET() {
     return NextResponse.json({ url });
   } catch (error) {
     console.error("Stripe dashboard error:", error);
-    return NextResponse.json({ error: "Unable to open Stripe dashboard" }, { status: 500 });
+    return createPlatformCapabilityErrorResponse(error, "Unable to open Stripe dashboard");
   }
 }

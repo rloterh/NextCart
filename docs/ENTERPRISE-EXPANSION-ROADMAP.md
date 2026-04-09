@@ -271,6 +271,54 @@ Bring the whole platform to a higher bar for polish, reliability, and perceived 
 
 - `feature/platform-polish-reliability`
 
+## Phase 6: Launch Readiness, Automation, And Scale
+
+### Objective
+
+Make NexCart feel operationally launch-ready by tightening runtime safety, surfacing platform readiness clearly, and laying disciplined foundations for event-driven automation.
+
+### Major Features
+
+- environment and runtime validation across critical platform boundaries
+- platform readiness surfaces for admin and vendor operators
+- marketplace event scaffolding for orders, disputes, moderation, and payouts
+- clearer configuration failure messaging in critical payment and governance workflows
+- automation-ready notification foundations without premature infrastructure sprawl
+
+### Sprint Breakdown
+
+#### Sprint 6A: Operational Readiness Foundation
+
+- validate Stripe, Supabase, Sanity, and public app configuration more explicitly
+- add admin and vendor launch-readiness visibility
+- create a shared marketplace event model for future notification channels
+- harden critical payment, payout, and privileged workflow error handling
+
+#### Sprint 6B: Notification Delivery Foundations
+
+- in-app event inbox groundwork
+- email-ready template boundaries
+- audience/channel mapping for marketplace events
+- clearer escalation paths for failures and delayed operations
+
+#### Sprint 6C: Launch Safety And Recovery
+
+- stronger degraded-mode and fallback handling
+- readiness checklist coverage for launch-critical surfaces
+- safer startup diagnostics and operational messaging
+- recovery guidance for missing configuration or broken integrations
+
+#### Sprint 6D: Scale And Automation Extensions
+
+- scheduled operational jobs and reminders groundwork
+- export and handoff readiness for finance and governance teams
+- richer automation around settlement, moderation, and dispute follow-up
+- scaling-oriented runbook and checklist coverage
+
+### Suggested Branch
+
+- `feature/launch-readiness-automation`
+
 ## Notes On Unfinished Existing Signals
 
 These should be treated as intentional completion targets unless product direction changes:

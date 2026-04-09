@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createPlatformCapabilityErrorResponse } from "@/lib/platform/readiness.server";
 import { calculatePlatformFee, createCheckoutPaymentIntent } from "@/lib/stripe/server";
 import { getServerUser, getSupabaseServerClient } from "@/lib/supabase/server";
 import type { CheckoutShippingAddress } from "@/types/orders";
@@ -180,6 +181,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ orders: results });
   } catch (error) {
     console.error("Checkout error:", error);
-    return NextResponse.json({ error: "Checkout failed" }, { status: 500 });
+    return createPlatformCapabilityErrorResponse(error, "Checkout failed");
   }
 }

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { DM_Sans, Playfair_Display } from "next/font/google";
-import { ToastViewport } from "@/components/ui/toast-viewport";
 import { SupabaseProvider } from "@/components/providers/supabase-provider";
+import { ToastViewport } from "@/components/ui/toast-viewport";
+import { getPublicAppUrl } from "@/lib/platform/readiness.public";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -17,9 +18,9 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: { default: "NexCart — Curated Marketplace", template: "%s — NexCart" },
+  title: { default: "NexCart - Curated Marketplace", template: "%s - NexCart" },
   description: "A curated multi-vendor marketplace connecting artisan vendors with discerning buyers worldwide.",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
+  metadataBase: new URL(getPublicAppUrl()),
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
