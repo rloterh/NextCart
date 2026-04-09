@@ -88,6 +88,7 @@ export interface PlatformIncidentHandoff {
   operatorGuidance: string;
   nextSteps: string[];
   queueLinks: PlatformSystemAction[];
+  supportBundleHref: string;
 }
 
 export type PlatformBoundaryClass = "config" | "permission" | "migration" | "dependency";
@@ -104,6 +105,37 @@ export interface PlatformBoundaryDiagnostic {
   href: string | null;
 }
 
+export type PlatformRunbookWorkflow =
+  | "config_recovery"
+  | "automation_delivery"
+  | "payout_reconciliation"
+  | "governance_escalation";
+
+export interface PlatformEscalationRunbook {
+  id: string;
+  title: string;
+  workflow: PlatformRunbookWorkflow;
+  summary: string;
+  owner: string;
+  severity: PlatformIncidentSeverity;
+  checklist: string[];
+  queueLinks: PlatformSystemAction[];
+  exportLinks: PlatformSystemAction[];
+}
+
+export interface PlatformSupportCaseBundle {
+  id: string;
+  incidentId: string;
+  title: string;
+  requestId: string;
+  generatedAt: string;
+  summary: string;
+  operatorGuidance: string;
+  runbookId: string;
+  exportLinks: PlatformSystemAction[];
+  queueLinks: PlatformSystemAction[];
+}
+
 export interface PlatformSystemPayload {
   requestId: string;
   generatedAt: string;
@@ -115,6 +147,8 @@ export interface PlatformSystemPayload {
   actions: PlatformSystemAction[];
   incidents: PlatformIncidentHandoff[];
   boundaries: PlatformBoundaryDiagnostic[];
+  runbooks: PlatformEscalationRunbook[];
+  supportBundles: PlatformSupportCaseBundle[];
 }
 
 export type PlatformNotificationTone = "info" | "success" | "warning" | "danger" | "muted";

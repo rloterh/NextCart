@@ -21,6 +21,7 @@ function buildIncident({
   operatorGuidance,
   nextSteps,
   queueLinks,
+  supportBundleHref,
 }: PlatformIncidentHandoff): PlatformIncidentHandoff {
   return {
     id,
@@ -32,6 +33,7 @@ function buildIncident({
     operatorGuidance,
     nextSteps,
     queueLinks,
+    supportBundleHref,
   };
 }
 
@@ -90,6 +92,7 @@ export function derivePlatformIncidents({
           buildAction("open-system", "Review system diagnostics", "Inspect the blocked readiness checks in one place.", "/admin/system"),
           buildAction("open-dashboard", "Open platform overview", "Cross-check which governance or payout queues are already showing pressure.", "/admin/dashboard"),
         ],
+        supportBundleHref: "/api/platform/handoff?incidentId=config-blockers",
       })
     );
   }
@@ -122,6 +125,7 @@ export function derivePlatformIncidents({
             buildAction("open-dashboard", "Review automation handoffs", "Use the dashboard automation panels to preview jobs and exports.", "/admin/dashboard"),
             buildAction("open-system", "Re-check diagnostics", "Confirm the platform system page reflects the updated readiness state.", "/admin/system"),
           ],
+          supportBundleHref: "/api/platform/handoff?incidentId=automation-delivery",
         })
       );
     }
@@ -144,6 +148,7 @@ export function derivePlatformIncidents({
             buildAction("open-payout-alerts", "Open payout alerts", "Jump straight into orders already carrying payout risk.", "/admin/orders?view=payout_alerts"),
             buildAction("open-payout-exports", "Open export handoffs", "Use the dashboard automation panel for payout review exports.", "/admin/dashboard"),
           ],
+          supportBundleHref: "/api/platform/handoff?incidentId=payout-pressure",
         })
       );
     }
@@ -174,6 +179,7 @@ export function derivePlatformIncidents({
             buildAction("open-disputes", "Open dispute queue", "Jump directly into active dispute handling.", "/admin/disputes?owner=unassigned"),
             buildAction("open-moderation", "Open moderation backlog", "Jump directly into queue items with policy pressure.", "/admin/moderation?view=vendor"),
           ],
+          supportBundleHref: "/api/platform/handoff?incidentId=governance-pressure",
         })
       );
     }

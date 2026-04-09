@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Activity, AlertTriangle, ArrowUpRight, ShieldCheck, Siren, Wrench } from "lucide-react";
+import { EscalationRunbookPanel } from "@/components/platform/escalation-runbook-panel";
 import { IncidentHandoffPanel } from "@/components/platform/incident-handoff-panel";
 import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { Card } from "@/components/ui/card";
@@ -148,6 +149,7 @@ export default function AdminSystemPage() {
           </Card>
 
           <IncidentHandoffPanel incidents={data.incidents} />
+          <EscalationRunbookPanel runbooks={data.runbooks} />
         </div>
 
         <div className="space-y-4">

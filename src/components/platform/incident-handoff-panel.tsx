@@ -77,6 +77,16 @@ export function IncidentHandoffPanel({
                   <p className="text-[10px] uppercase tracking-widest text-stone-400">Trace id</p>
                   <p className="mt-2 break-all text-sm font-medium text-stone-900 dark:text-white">{incident.requestId}</p>
                 </div>
+                <Link
+                  href={incident.supportBundleHref}
+                  className="flex items-start justify-between gap-3 border border-stone-200 p-3 transition-colors hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-stone-900/60"
+                >
+                  <div>
+                    <p className="font-medium text-stone-900 dark:text-white">Download handoff bundle</p>
+                    <p className="mt-1 text-xs leading-relaxed text-stone-500">Package this incident into a shareable support and ops handoff artifact.</p>
+                  </div>
+                  <ArrowUpRight className="mt-0.5 h-4 w-4 text-stone-500" />
+                </Link>
                 {incident.queueLinks.map((action) => (
                   <Link
                     key={action.id}
