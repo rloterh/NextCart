@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Clock3, Package, Scale } from "lucide-react";
+import { PermissionBoundarySummary } from "@/components/platform/permission-boundary-summary";
 import { SensitiveActionReview } from "@/components/platform/sensitive-action-review";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -597,6 +598,24 @@ export default function AdminDisputesPage() {
                     <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Admin notes<textarea rows={4} value={selectedCase.admin_notes ?? ""} onChange={(event) => patchSelectedCase({ admin_notes: event.target.value })} className="border border-stone-200 bg-transparent px-3 py-2 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200" /></label>
                     <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Resolution notes<textarea rows={3} value={selectedCase.resolution ?? ""} onChange={(event) => patchSelectedCase({ resolution: event.target.value })} className="border border-stone-200 bg-transparent px-3 py-2 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200" /></label>
                   </div>
+
+                  <PermissionBoundarySummary
+                    title="Dispute finance boundary"
+                    status={workflowMigrationRequired ? "blocked" : needsSensitiveReview ? "attention" : "healthy"}
+                    capability="dispute_workflow"
+                    summary={
+                      workflowMigrationRequired
+                        ? "Advanced refund-decision and payout-hold controls are unavailable until the governance workflow migration is applied."
+                        : "Refund and payout-hold decisions are admin-only and should line up with case notes, assigned ownership, and buyer/vendor communication posture."
+                    }
+                    operatorGuidance={
+                      workflowMigrationRequired
+                        ? "Treat save failures here as a migration/runtime dependency issue first, then retry once the workflow columns are available."
+                        : needsSensitiveReview
+                          ? "Because this case touches money movement or final resolution, pause for another admin when evidence is thin, ownership is unclear, or payout impact feels ambiguous."
+                          : "Use the assignment and notes fields to keep case ownership explicit before a dispute drifts into refund or payout escalation."
+                    }
+                  />
 
                   {sensitiveReview ? (
                     <SensitiveActionReview

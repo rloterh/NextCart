@@ -4,8 +4,8 @@ import type { AdminActionAuditMetadata, Profile } from "@/types";
 import type {
   PlatformAccessPayload,
   PlatformAccessRoleDefinition,
-  PlatformBoundaryStatus,
   PlatformPrivilegedAccessEvent,
+  PlatformBoundaryStatus,
   PlatformSystemAction,
 } from "@/types/platform";
 
@@ -36,6 +36,101 @@ function getGuardrailStatus(status: PlatformBoundaryStatus) {
 
 function createAction(action: PlatformSystemAction) {
   return action;
+}
+
+export interface PlatformAccessFilters {
+  sensitivity?: "all" | "high" | "elevated" | "standard";
+  requiresReason?: boolean;
+  requiresTrace?: boolean;
+  adminTransitionsOnly?: boolean;
+  escalationsOnly?: boolean;
+}
+
+function normalizeFilterMode<T extends string>(value: T | undefined, fallback: T) {
+  return value ?? fallback;
+}
+
+export function filterPlatformAccessActions(
+  actions: PlatformPrivilegedAccessEvent[],
+  filters: PlatformAccessFilters
+) {
+  const sensitivity = normalizeFilterMode(filters.sensitivity, "all");
+
+  return actions.filter((action) => {
+    if (sensitivity !== "all" && action.sensitivity !== sensitivity) {
+      return false;
+    }
+    if (filters.requiresReason && action.reasonProvided) {
+      return false;
+    }
+    if (filters.requiresTrace && action.requestId) {
+      return false;
+    }
+    if (filters.adminTransitionsOnly && action.fromRole !== "admin" && action.toRole !== "admin") {
+      return false;
+    }
+    if (filters.escalationsOnly && !action.requiresEscalation) {
+      return false;
+    }
+    return true;
+  });
+}
+
+export function formatPlatformAccessExportRows(actions: PlatformPrivilegedAccessEvent[]) {
+  return actions.map((action) => ({
+    action: action.action,
+    actor: action.actorLabel,
+    target: action.targetLabel,
+    sensitivity: action.sensitivity,
+    requires_escalation: action.requiresEscalation ? "yes" : "no",
+    from_role: action.fromRole ?? null,
+    to_role: action.toRole ?? null,
+    reason_recorded: action.reasonProvided ? "yes" : "no",
+    trace_id: action.requestId ?? null,
+    capability: action.capability ?? null,
+    route: action.route ?? null,
+    queue_href: action.queueHref ?? null,
+    changed_at: action.createdAt,
+  }));
+}
+
+function buildCsv(rows: Array<Record<string, string | number | null>>) {
+  if (rows.length === 0) {
+    return "";
+  }
+
+  const headers = Object.keys(rows[0]);
+  const escapeCell = (value: string | number | null) => {
+    const stringValue = value === null ? "" : String(value);
+    if (/[",\n]/.test(stringValue)) {
+      return `"${stringValue.replace(/"/g, "\"\"")}"`;
+    }
+    return stringValue;
+  };
+
+  return [headers.join(","), ...rows.map((row) => headers.map((header) => escapeCell(row[header] ?? null)).join(","))].join("\n");
+}
+
+export function formatPlatformAccessExport(
+  format: "csv" | "json",
+  actions: PlatformPrivilegedAccessEvent[]
+) {
+  const rows = formatPlatformAccessExportRows(actions);
+  const filename = `access-review-evidence-${new Date().toISOString().slice(0, 10)}.${format}`;
+
+  if (format === "json") {
+    return {
+      filename,
+      contentType: "application/json; charset=utf-8",
+      body: JSON.stringify(rows, null, 2),
+    };
+  }
+
+  return {
+    filename,
+    contentType: "text/csv; charset=utf-8",
+    body: buildCsv(rows),
+  };
 }
 
 export async function buildPlatformAccessPayload({
@@ -103,6 +198,8 @@ export async function buildPlatformAccessPayload({
       route: audit?.route ?? null,
       queueHref: audit?.queue_href ?? null,
       capability: audit?.capability ?? null,
+      requiresEscalation:
+        (audit?.sensitivity ?? "standard") === "high" || fromRole === "admin" || toRole === "admin",
     };
   });
 

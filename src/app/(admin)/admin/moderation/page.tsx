@@ -4,6 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ClipboardList, EyeOff, Package, ShieldAlert, Sparkles, Star, Store, UserRoundCheck } from "lucide-react";
+import { PermissionBoundarySummary } from "@/components/platform/permission-boundary-summary";
 import { SensitiveActionReview } from "@/components/platform/sensitive-action-review";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -556,6 +557,24 @@ export default function AdminModerationPage() {
                 <label htmlFor="policy-reason" className="text-xs font-medium uppercase tracking-widest text-stone-400">Policy note</label>
                 <textarea id="policy-reason" value={policyReason} onChange={(event) => setPolicyReason(event.target.value)} rows={4} placeholder="Add the policy or context behind this action." className="mt-2 w-full border border-stone-200 bg-transparent px-3 py-2 text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200" />
               </div>
+
+              {selectedItem.entityType === "vendor" || selectedItem.entityType === "review" ? (
+                <PermissionBoundarySummary
+                  title={selectedItem.entityType === "vendor" ? "Vendor governance boundary" : "Review moderation boundary"}
+                  status="attention"
+                  capability={selectedItem.entityType === "vendor" ? "vendor_governance" : "review_moderation"}
+                  summary={
+                    selectedItem.entityType === "vendor"
+                      ? "Vendor approval, suspension, and reinstatement affect storefront trust, access expectations, and may require parallel review of disputes or payout posture."
+                      : "Review visibility changes affect buyer trust surfaces and should be tied to a clear policy rationale rather than sentiment alone."
+                  }
+                  operatorGuidance={
+                    selectedItem.entityType === "vendor"
+                      ? "Escalate when the storefront has open disputes, payout risk, or mixed moderation signals that make the governance decision less obvious."
+                      : "Escalate when the review suggests fraud, coordinated abuse, or a broader trust issue that should widen beyond this single moderation action."
+                  }
+                />
+              ) : null}
 
               {selectedReviewCheckpoint ? (
                 <SensitiveActionReview

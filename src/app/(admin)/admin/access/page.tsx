@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo, useState } from "react";
 import { ArrowUpRight, KeyRound, ShieldCheck, ShieldPlus, Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { PageIntro, PageTransition } from "@/components/ui/page-shell";
@@ -8,6 +9,16 @@ import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { StatusBadge, ToneBadge } from "@/components/ui/status-badge";
 import { usePlatformAccess } from "@/hooks/use-platform-access";
 import { formatDate } from "@/lib/utils/constants";
+
+const accessFilters = [
+  { label: "All changes", value: "all" as const },
+  { label: "Admin transitions", value: "admin" as const },
+  { label: "Missing rationale", value: "missing_reason" as const },
+  { label: "Missing trace", value: "missing_trace" as const },
+  { label: "Escalation markers", value: "escalation" as const },
+];
+
+type AccessReviewFilter = (typeof accessFilters)[number]["value"];
 
 function getGuardrailTone(status: "healthy" | "attention" | "blocked") {
   switch (status) {
@@ -33,6 +44,34 @@ function getSensitivityTone(sensitivity: "standard" | "elevated" | "high") {
 
 export default function AdminAccessPage() {
   const { data, loading, error, refetch } = usePlatformAccess();
+  const [reviewFilter, setReviewFilter] = useState<AccessReviewFilter>("all");
+
+  const visibleActions = useMemo(() => {
+    if (!data) return [];
+    return data.recentActions.filter((action) => {
+      switch (reviewFilter) {
+        case "admin":
+          return action.fromRole === "admin" || action.toRole === "admin";
+        case "missing_reason":
+          return !action.reasonProvided;
+        case "missing_trace":
+          return !action.requestId;
+        case "escalation":
+          return action.requiresEscalation;
+        default:
+          return true;
+      }
+    });
+  }, [data, reviewFilter]);
+
+  const exportHref = useMemo(() => {
+    const params = new URLSearchParams({ format: "csv" });
+    if (reviewFilter === "admin") params.set("adminTransitionsOnly", "true");
+    if (reviewFilter === "missing_reason") params.set("requiresReason", "true");
+    if (reviewFilter === "missing_trace") params.set("requiresTrace", "true");
+    if (reviewFilter === "escalation") params.set("escalationsOnly", "true");
+    return `/api/platform/access/export?${params.toString()}`;
+  }, [reviewFilter]);
 
   if (loading) {
     return (
@@ -78,6 +117,15 @@ export default function AdminAccessPage() {
         eyebrow="Phase 8"
         title="Access controls"
         description="Keep privileged access changes disciplined with a role matrix, operator guardrails, and trace-linked access evidence."
+        actions={
+          <Link
+            href={exportHref}
+            className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.2em] text-stone-500 transition-colors hover:text-stone-900 dark:hover:text-white"
+          >
+            Export evidence
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
+        }
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -141,19 +189,35 @@ export default function AdminAccessPage() {
             <div className="border-b border-stone-100 px-5 py-4 dark:border-stone-800">
               <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Recent privileged access changes</p>
               <p className="mt-1 text-sm text-stone-500">Use this as the evidence trail for role changes and later compliance review.</p>
+              <div className="mt-3 flex flex-wrap gap-1">
+                {accessFilters.map((entry) => (
+                  <button
+                    key={entry.value}
+                    type="button"
+                    onClick={() => setReviewFilter(entry.value)}
+                    className={`px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors ${
+                      reviewFilter === entry.value
+                        ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900"
+                        : "text-stone-500 hover:text-stone-900 dark:hover:text-white"
+                    }`}
+                  >
+                    {entry.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {data.recentActions.length === 0 ? (
+            {visibleActions.length === 0 ? (
               <div className="p-5">
                 <StatePanel
-                  title="No privileged access changes recorded yet"
-                  description="New audited role changes will appear here as the Phase 8 workflow gets used."
+                  title="No access review events match this filter"
+                  description="Try another review slice or export the current filter once more privileged changes have been recorded."
                   tone="warning"
                 />
               </div>
             ) : (
               <div className="divide-y divide-stone-100 dark:divide-stone-800">
-                {data.recentActions.map((action) => (
+                {visibleActions.map((action) => (
                   <div key={action.id} className="px-5 py-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
@@ -164,6 +228,7 @@ export default function AdminAccessPage() {
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <ToneBadge tone={getSensitivityTone(action.sensitivity)}>{action.sensitivity}</ToneBadge>
+                        {action.requiresEscalation ? <ToneBadge tone="warning">Escalation marker</ToneBadge> : null}
                         {action.capability ? <ToneBadge tone="muted">{action.capability.replaceAll("_", " ")}</ToneBadge> : null}
                       </div>
                     </div>

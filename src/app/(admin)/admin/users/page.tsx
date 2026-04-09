@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, Shield, ShieldAlert, ShoppingBag, Store, UserCog, Users } from "lucide-react";
 import { ROLE_METADATA } from "@/config/roles";
+import { PermissionBoundarySummary } from "@/components/platform/permission-boundary-summary";
 import { SensitiveActionReview } from "@/components/platform/sensitive-action-review";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -353,6 +354,20 @@ export default function AdminUsersPage() {
                                   Apply access change
                                 </Button>
                               </div>
+                            </div>
+
+                            <div className="mt-4">
+                              <PermissionBoundarySummary
+                                title="Privileged role management"
+                                status={user.role === "admin" || pendingRole === "admin" ? "attention" : "healthy"}
+                                capability="users_manage_access"
+                                summary="Role changes are admin-only and route through a privileged server mutation so the marketplace doesn’t rely on raw client-side role edits."
+                                operatorGuidance={
+                                  user.role === "admin" || pendingRole === "admin"
+                                    ? "Because this change touches admin access, pause for a second reviewer if ownership or ongoing coverage is unclear."
+                                    : "If this change fails, treat it as either a permission boundary or privileged runtime dependency issue rather than a simple UI error."
+                                }
+                              />
                             </div>
 
                             <div className="mt-4">

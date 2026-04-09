@@ -197,6 +197,7 @@ export interface PlatformPrivilegedAccessEvent {
   route: string | null;
   queueHref: string | null;
   capability: string | null;
+  requiresEscalation: boolean;
 }
 
 export interface PlatformAccessPayload {

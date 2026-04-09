@@ -33,7 +33,10 @@ export function SensitiveActionReview({
           <h3 className="mt-2 font-medium text-stone-900 dark:text-white">{review.title}</h3>
           <p className="mt-2 text-sm leading-relaxed text-stone-500">{review.summary}</p>
         </div>
-        <ToneBadge tone={getTone(review.sensitivity)}>{review.sensitivity}</ToneBadge>
+        <div className="flex flex-wrap gap-2">
+          <ToneBadge tone={getTone(review.sensitivity)}>{review.sensitivity}</ToneBadge>
+          {review.sensitivity === "high" ? <ToneBadge tone="warning">Second reviewer recommended</ToneBadge> : null}
+        </div>
       </div>
 
       <div className="space-y-2">
