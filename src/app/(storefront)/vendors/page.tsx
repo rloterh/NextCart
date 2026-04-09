@@ -1,58 +1,99 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Star } from "lucide-react";
+import { PageIntro, PageTransition } from "@/components/ui/page-shell";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getStoreTrustBadges } from "@/lib/storefront/store-profile";
 import type { Store } from "@/types";
 
-const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.08 } } };
-const item = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { duration: 0.5 } } };
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.08 } },
+};
+
+const item = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.5 } },
+};
 
 export default function VendorsPage() {
+  const prefersReducedMotion = useReducedMotion();
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetch() {
-      const sb = getSupabaseBrowserClient();
-      const { data } = await sb
-        .from("stores")
-        .select("*, owner:profiles(full_name, avatar_url)")
-        .eq("status", "approved")
-        .order("rating_avg", { ascending: false });
+  const fetchStores = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    const sb = getSupabaseBrowserClient();
+    const { data, error: queryError } = await sb
+      .from("stores")
+      .select("*, owner:profiles(full_name, avatar_url)")
+      .eq("status", "approved")
+      .order("rating_avg", { ascending: false });
+
+    if (queryError) {
+      setStores([]);
+      setError(queryError.message);
+    } else {
       setStores((data ?? []) as Store[]);
-      setLoading(false);
     }
-    void fetch();
+
+    setLoading(false);
   }, []);
 
+  useEffect(() => {
+    void fetchStores();
+  }, [fetchStores]);
+
   return (
-    <div className="mx-auto max-w-7xl px-6 py-12">
-      <div className="mb-12 text-center">
-        <p className="text-xs font-medium uppercase tracking-[0.3em] text-stone-400">Discover</p>
-        <h1 className="mt-2 font-serif text-4xl text-stone-900 dark:text-white">Our vendors</h1>
-        <p className="mt-3 text-sm text-stone-500">Every vendor is vetted, story-led, and reviewed for fulfillment quality before merchandising.</p>
-      </div>
+    <PageTransition className="mx-auto max-w-7xl px-6 py-12">
+      <PageIntro
+        eyebrow="Discover"
+        title="Our vendors"
+        description="Every vendor is vetted, story-led, and reviewed for fulfillment quality before merchandising."
+      />
 
       {loading ? (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="h-64 animate-pulse bg-stone-100 dark:bg-stone-800" />
+            <div key={index} className="space-y-4 border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+              <div className="h-32 animate-pulse bg-stone-100 dark:bg-stone-800" />
+              <SkeletonBlock lines={3} />
+            </div>
           ))}
         </div>
+      ) : error ? (
+        <StatePanel
+          title="We could not load vendors right now"
+          description={error}
+          tone="danger"
+          actionLabel="Retry"
+          onAction={() => void fetchStores()}
+        />
       ) : stores.length === 0 ? (
-        <p className="py-20 text-center font-serif text-xl text-stone-400">No vendors yet</p>
+        <StatePanel
+          title="No vendors are available yet"
+          description="Approved storefronts will appear here as soon as they are ready for discovery."
+        />
       ) : (
-        <motion.div variants={container} initial="hidden" animate="show" className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <motion.div
+          variants={prefersReducedMotion ? undefined : container}
+          initial={prefersReducedMotion ? false : "hidden"}
+          animate="show"
+          className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+        >
           {stores.map((store) => {
             const badges = getStoreTrustBadges(store);
 
             return (
-              <motion.div key={store.id} variants={item}>
+              <motion.div key={store.id} variants={prefersReducedMotion ? undefined : item}>
                 <Link href={`/vendors/${store.slug}`} className="group block border border-stone-200 bg-white transition-shadow hover:shadow-md dark:border-stone-800 dark:bg-stone-900">
                   <div className="relative h-32 overflow-hidden bg-stone-100 dark:bg-stone-800">
                     {store.banner_url ? (
@@ -97,6 +138,6 @@ export default function VendorsPage() {
           })}
         </motion.div>
       )}
-    </div>
+    </PageTransition>
   );
 }
