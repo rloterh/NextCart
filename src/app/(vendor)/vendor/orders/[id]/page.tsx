@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { OrderStatusBadge } from "@/components/ui/status-badge";
 import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useAuth } from "@/hooks/use-auth";
+import { getOrderRecoveryMessage } from "@/lib/platform/notifications";
 import { renderOrderCommunicationTemplate } from "@/lib/orders/communication-templates";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatDate, formatPrice } from "@/lib/utils/constants";
@@ -281,6 +282,12 @@ export default function VendorOrderDetailPage() {
         processingTime: storeProfile?.processingTime,
       })
     : null;
+  const recoveryMessage = getOrderRecoveryMessage({
+    audience: "vendor",
+    status: order.status,
+    storeName: order.store?.name ?? store?.name ?? null,
+    supportEmail: storeProfile?.supportEmail,
+  });
   const timeline = [
     { label: "Order placed", timestamp: order.created_at, reached: true, description: "The buyer completed checkout and the order entered your queue." },
     { label: "Confirmed", timestamp: null, reached: order.status !== "pending", description: "Payment and order details were confirmed for vendor handling." },
@@ -516,15 +523,11 @@ export default function VendorOrderDetailPage() {
         </div>
       </Card>
 
-      {order.status === "delivery_failed" || order.status === "reshipping" || order.status === "return_initiated" || order.status === "return_approved" || order.status === "return_in_transit" || order.status === "return_received" ? (
+      {recoveryMessage ? (
         <Card>
-          <CardTitle>Exception handling guidance</CardTitle>
+          <CardTitle>{recoveryMessage.title}</CardTitle>
           <div className="mt-3 space-y-3 text-sm text-stone-500">
-            <p>
-              {order.status === "delivery_failed" || order.status === "reshipping"
-                ? "Capture the new shipment plan in notes, refresh tracking when the retry is booked, and keep buyer-facing timing aligned with the latest carrier update."
-                : "Keep return instructions, inbound tracking, and final resolution notes aligned so the buyer always sees the current next step."}
-            </p>
+            <p>{recoveryMessage.description}</p>
             <p>
               {storeProfile?.supportEmail
                 ? `Escalations should route through ${storeProfile.supportEmail}.`

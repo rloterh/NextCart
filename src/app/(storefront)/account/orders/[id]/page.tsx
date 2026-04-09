@@ -11,6 +11,7 @@ import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { OrderStatusBadge } from "@/components/ui/status-badge";
 import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useAuth } from "@/hooks/use-auth";
+import { getOrderRecoveryMessage } from "@/lib/platform/notifications";
 import { renderOrderCommunicationTemplate } from "@/lib/orders/communication-templates";
 import { orderStatusCopy } from "@/lib/orders/status-copy";
 import { getStoreProfileContent } from "@/lib/storefront/store-profile";
@@ -137,6 +138,12 @@ export default function BuyerOrderDetailPage() {
         processingTime: storeProfile?.processingTime,
       })
     : null;
+  const recoveryMessage = getOrderRecoveryMessage({
+    audience: "buyer",
+    status: order.status,
+    storeName: order.store?.name ?? null,
+    supportEmail: storeProfile?.supportEmail,
+  });
   const timeline = [
     { key: "pending", label: "Order placed", reached: true, timestamp: order.created_at, description: "Checkout completed and payment entered the marketplace workflow." },
     { key: "confirmed", label: "Confirmed", reached: order.status !== "pending", timestamp: null, description: "Payment and order details were confirmed for vendor handling." },
@@ -295,14 +302,10 @@ export default function BuyerOrderDetailPage() {
         </Card>
       </div>
 
-      {order.status === "delivery_failed" || order.status === "return_initiated" ? (
+      {recoveryMessage ? (
         <Card>
-          <CardTitle>Exception guidance</CardTitle>
-          <p className="mt-3 text-sm leading-relaxed text-stone-500">
-            {order.status === "delivery_failed"
-              ? "The vendor is reviewing the failed delivery event and should update this page once the new delivery plan is confirmed."
-              : "A return or post-delivery exception is underway. Keep this order page and your support messages aligned while the next step is confirmed."}
-          </p>
+          <CardTitle>{recoveryMessage.title}</CardTitle>
+          <p className="mt-3 text-sm leading-relaxed text-stone-500">{recoveryMessage.description}</p>
         </Card>
       ) : null}
 
