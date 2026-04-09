@@ -358,6 +358,44 @@ Make NexCart easier to operate safely in production by adding clearer diagnostic
 
 - `feature/security-observability-readiness`
 
+## Phase 8: Identity, Access, And Compliance Controls
+
+### Objective
+
+Strengthen who can do what across NexCart by making privileged access changes safer, easier to review, and more accountable for operators.
+
+### Major Features
+
+- admin access-control overview and role policy matrix
+- safer privileged role changes with rationale capture and audit visibility
+- clearer permission-boundary and capability review surfaces
+- compliance-minded access review and handoff signals
+
+### Sprint Breakdown
+
+#### Sprint 8A: Access Governance Foundation
+
+- admin access-control console
+- role and permission matrix
+- safer role change workflow with rationale capture
+- last-admin protection and privileged change audit logging
+
+#### Sprint 8B: Permission Review And Operator Safety
+
+- role/capability review checkpoints
+- stronger guardrails around privileged user-management actions
+- clearer escalation guidance for blocked or risky access changes
+
+#### Sprint 8C: Compliance Visibility And Review
+
+- access review evidence surfaces
+- policy/readiness summaries for sensitive workflows
+- better audit and handoff artifacts for internal review
+
+### Suggested Branch
+
+- `feature/identity-access-compliance`
+
 ## Notes On Unfinished Existing Signals
 
 These should be treated as intentional completion targets unless product direction changes:

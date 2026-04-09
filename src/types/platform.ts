@@ -151,6 +151,56 @@ export interface PlatformSystemPayload {
   supportBundles: PlatformSupportCaseBundle[];
 }
 
+export interface PlatformAccessSummary {
+  admins: number;
+  vendors: number;
+  buyers: number;
+  privilegedChanges7d: number;
+}
+
+export interface PlatformAccessRoleDefinition {
+  role: PlatformAudience;
+  label: string;
+  description: string;
+  count: number;
+  permissions: string[];
+}
+
+export interface PlatformAccessGuardrail {
+  id: string;
+  label: string;
+  status: PlatformBoundaryStatus;
+  summary: string;
+  detail: string;
+  href: string | null;
+}
+
+export interface PlatformPrivilegedAccessEvent {
+  id: string;
+  action: string;
+  actorLabel: string;
+  targetLabel: string;
+  createdAt: string;
+  sensitivity: "standard" | "elevated" | "high";
+  reasonProvided: boolean;
+  requestId: string | null;
+  fromRole: string | null;
+  toRole: string | null;
+  route: string | null;
+  queueHref: string | null;
+  capability: string | null;
+}
+
+export interface PlatformAccessPayload {
+  requestId: string;
+  generatedAt: string;
+  summary: PlatformAccessSummary;
+  roles: PlatformAccessRoleDefinition[];
+  guardrails: PlatformAccessGuardrail[];
+  recentActions: PlatformPrivilegedAccessEvent[];
+  actions: PlatformSystemAction[];
+}
+
 export type PlatformNotificationTone = "info" | "success" | "warning" | "danger" | "muted";
 export type PlatformNotificationState = "unread" | "read" | "archived";
 
