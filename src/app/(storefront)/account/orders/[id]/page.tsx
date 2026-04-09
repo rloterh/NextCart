@@ -1,20 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { motion } from "framer-motion";
 import { ArrowLeft, Mail, MapPin, Truck } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
+import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { OrderStatusBadge } from "@/components/ui/status-badge";
 import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useAuth } from "@/hooks/use-auth";
 import { renderOrderCommunicationTemplate } from "@/lib/orders/communication-templates";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { formatDate, formatPrice } from "@/lib/utils/constants";
 import { orderStatusCopy } from "@/lib/orders/status-copy";
 import { getStoreProfileContent } from "@/lib/storefront/store-profile";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { formatDate, formatPrice } from "@/lib/utils/constants";
 import type { Store } from "@/types";
 import { ORDER_STATUS_CONFIG } from "@/types/orders";
 import type { CheckoutShippingAddress, Order, OrderItem } from "@/types/orders";
@@ -33,41 +34,41 @@ export default function BuyerOrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchOrder() {
-      if (!user || !id) {
-        setOrder(null);
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      const sb = getSupabaseBrowserClient();
-      const { data, error: queryError } = await sb
-        .from("orders")
-        .select("*, store:stores(name, slug, settings), items:order_items(*)")
-        .eq("id", id)
-        .eq("buyer_id", user.id)
-        .single();
-
-      if (queryError) {
-        setError(queryError.message);
-        setOrder(null);
-      } else {
-        setOrder(data as BuyerOrderDetail);
-      }
-
+  const fetchOrder = useCallback(async () => {
+    if (!user || !id) {
+      setOrder(null);
       setLoading(false);
+      return;
     }
 
+    setLoading(true);
+    setError(null);
+
+    const sb = getSupabaseBrowserClient();
+    const { data, error: queryError } = await sb
+      .from("orders")
+      .select("*, store:stores(name, slug, settings), items:order_items(*)")
+      .eq("id", id)
+      .eq("buyer_id", user.id)
+      .single();
+
+    if (queryError) {
+      setError(queryError.message);
+      setOrder(null);
+    } else {
+      setOrder(data as BuyerOrderDetail);
+    }
+
+    setLoading(false);
+  }, [id, user]);
+
+  useEffect(() => {
     if (authLoading) {
       return;
     }
 
     void fetchOrder();
-  }, [authLoading, id, user]);
+  }, [authLoading, fetchOrder]);
 
   if (authLoading || loading) {
     return (
@@ -82,7 +83,13 @@ export default function BuyerOrderDetailPage() {
   if (error) {
     return (
       <div className="mx-auto max-w-3xl px-6 py-20">
-        <StatePanel title="We could not load this order right now" description={error} tone="danger" />
+        <StatePanel
+          title="We could not load this order right now"
+          description={error}
+          tone="danger"
+          actionLabel="Retry"
+          onAction={() => void fetchOrder()}
+        />
       </div>
     );
   }
@@ -147,20 +154,19 @@ export default function BuyerOrderDetailPage() {
   ];
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-3xl space-y-6 px-6 py-8">
-      <div className="flex items-center gap-3">
-        <Link href="/account/orders">
-          <button className="p-1.5 text-stone-400 hover:text-stone-900 dark:hover:text-white">
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-        </Link>
-        <div>
-          <h1 className="font-serif text-2xl text-stone-900 dark:text-white">{order.order_number}</h1>
-          <p className="text-sm text-stone-500">
-            Placed {formatDate(order.created_at)} &middot; {order.store?.name ?? "Marketplace order"}
-          </p>
-        </div>
-      </div>
+    <PageTransition className="mx-auto max-w-3xl px-6 py-8">
+      <PageIntro
+        eyebrow="Order details"
+        title={order.order_number}
+        description={`Placed ${formatDate(order.created_at)} - ${order.store?.name ?? "Marketplace order"}`}
+        actions={
+          <Link href="/account/orders">
+            <Button variant="ghost" leftIcon={<ArrowLeft className="h-4 w-4" />}>
+              Back to orders
+            </Button>
+          </Link>
+        }
+      />
 
       <Card>
         <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Order status</p>
@@ -206,7 +212,9 @@ export default function BuyerOrderDetailPage() {
                 <div className={`mt-1 h-2.5 w-2.5 rounded-full ${entry.reached ? "bg-stone-900 dark:bg-white" : "bg-stone-200 dark:bg-stone-700"}`} />
                 <div>
                   <p className="text-sm font-medium text-stone-900 dark:text-white">{entry.label}</p>
-                  <p className="mt-1 text-xs text-stone-400">{entry.timestamp ? formatDate(entry.timestamp) : entry.reached ? "Completed in workflow" : "Waiting on this milestone"}</p>
+                  <p className="mt-1 text-xs text-stone-400">
+                    {entry.timestamp ? formatDate(entry.timestamp) : entry.reached ? "Completed in workflow" : "Waiting on this milestone"}
+                  </p>
                   <p className="mt-1 text-sm text-stone-500">{entry.description}</p>
                 </div>
               </div>
@@ -321,7 +329,13 @@ export default function BuyerOrderDetailPage() {
         </Card>
       ) : null}
 
-      {!resolutionTemplate && (order.status === "delivery_failed" || order.status === "reshipping" || order.status === "return_initiated" || order.status === "return_approved" || order.status === "return_in_transit" || order.status === "return_received") ? (
+      {!resolutionTemplate &&
+      (order.status === "delivery_failed" ||
+        order.status === "reshipping" ||
+        order.status === "return_initiated" ||
+        order.status === "return_approved" ||
+        order.status === "return_in_transit" ||
+        order.status === "return_received") ? (
         <Card>
           <CardTitle>Resolution update</CardTitle>
           <p className="mt-3 text-sm leading-relaxed text-stone-500">
@@ -331,6 +345,6 @@ export default function BuyerOrderDetailPage() {
           </p>
         </Card>
       ) : null}
-    </motion.div>
+    </PageTransition>
   );
 }
