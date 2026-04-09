@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
+import { createPlatformBoundaryErrorResponse } from "@/lib/platform/boundaries";
+import { getRequestTrace, jsonWithTrace, logPlatformEvent } from "@/lib/platform/observability";
 import { getPublicSupabaseConfig } from "@/lib/platform/readiness.public";
 import { createPlatformCapabilityErrorResponse, requirePlatformCapability } from "@/lib/platform/readiness.server";
 import { getServerUser } from "@/lib/supabase/server";
@@ -11,10 +12,17 @@ function getSupabaseAdminClient() {
 }
 
 export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const trace = getRequestTrace(_request);
   try {
     const user = await getServerUser();
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return createPlatformBoundaryErrorResponse(trace, {
+        status: 401,
+        error: "Unauthorized",
+        boundaryClass: "permission",
+        operatorGuidance: "Sign in before voting on review helpfulness.",
+        detail: "Helpful votes are available only to authenticated marketplace users.",
+      });
     }
 
     const { id } = await context.params;
@@ -27,11 +35,23 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
       .single();
 
     if (reviewError || !review) {
-      return NextResponse.json({ error: "Review not found" }, { status: 404 });
+      return createPlatformBoundaryErrorResponse(trace, {
+        status: 404,
+        error: "Review not found",
+        boundaryClass: "dependency",
+        operatorGuidance: "Refresh the product page and retry after confirming the review still exists.",
+        detail: `No review row was found for ${id}.`,
+      });
     }
 
     if (review.user_id === user.id) {
-      return NextResponse.json({ error: "You cannot mark your own review as helpful" }, { status: 400 });
+      return createPlatformBoundaryErrorResponse(trace, {
+        status: 400,
+        error: "You cannot mark your own review as helpful",
+        boundaryClass: "permission",
+        operatorGuidance: "Helpful votes are limited to other shoppers so review trust signals stay credible.",
+        detail: "The current user is the author of the target review.",
+      });
     }
 
     const { data: existingVote } = await supabaseAdmin
@@ -42,7 +62,13 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
       .maybeSingle();
 
     if (existingVote) {
-      return NextResponse.json({ error: "Already voted" }, { status: 409 });
+      return createPlatformBoundaryErrorResponse(trace, {
+        status: 409,
+        error: "Already voted",
+        boundaryClass: "dependency",
+        operatorGuidance: "Treat this as an idempotent shopper action rather than a write failure.",
+        detail: "A helpful-vote record already exists for this user and review.",
+      });
     }
 
     const { error: voteError } = await supabaseAdmin.from("review_helpful_votes").insert({
@@ -51,19 +77,45 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
     });
 
     if (voteError) {
-      return NextResponse.json({ error: voteError.message }, { status: 500 });
+      return createPlatformBoundaryErrorResponse(trace, {
+        status: 500,
+        error: voteError.message,
+        boundaryClass: "dependency",
+        operatorGuidance: "Retry after confirming the helpful-vote table and service-role access are healthy.",
+        detail: "The helpful-vote insert failed before the review count could be updated.",
+      });
     }
 
     const nextHelpfulCount = (review.helpful_count ?? 0) + 1;
     const { error: updateError } = await supabaseAdmin.from("reviews").update({ helpful_count: nextHelpfulCount }).eq("id", id);
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
+      return createPlatformBoundaryErrorResponse(trace, {
+        status: 500,
+        error: updateError.message,
+        boundaryClass: "dependency",
+        operatorGuidance: "Retry after confirming review update access is healthy so the helpful count stays in sync.",
+        detail: "The helpful-vote row was created, but the review helpful count could not be updated.",
+      });
     }
 
-    return NextResponse.json({ helpfulCount: nextHelpfulCount });
+    logPlatformEvent({
+      level: "info",
+      message: "Recorded review helpful vote",
+      trace,
+      detail: { reviewId: id },
+    });
+
+    return jsonWithTrace(trace, { helpfulCount: nextHelpfulCount });
   } catch (error) {
-    console.error("Review helpful vote error:", error);
-    return createPlatformCapabilityErrorResponse(error, "Unable to save helpful vote");
+    logPlatformEvent({
+      level: "error",
+      message: "Review helpful vote failed",
+      trace,
+      detail: error instanceof Error ? error.message : error,
+    });
+    const response = createPlatformCapabilityErrorResponse(error, "Unable to save helpful vote");
+    response.headers.set("x-request-id", trace.requestId);
+    return response;
   }
 }
