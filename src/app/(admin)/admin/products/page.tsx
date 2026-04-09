@@ -1,0 +1,281 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Archive, Eye, Package, PauseCircle, PlayCircle, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { PageIntro, PageTransition } from "@/components/ui/page-shell";
+import { ProductStatusBadge, ToneBadge } from "@/components/ui/status-badge";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
+import { loadQueuePreference, loadQueueTextPreference, saveQueuePreference } from "@/lib/ui/queue-preferences";
+import { useUIStore } from "@/stores/ui-store";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { formatDate, formatPrice } from "@/lib/utils/constants";
+import type { Category, Product, ProductStatus, Store } from "@/types";
+
+type ModerationProduct = Product & {
+  store?: Pick<Store, "id" | "name" | "slug"> | null;
+  category?: Pick<Category, "id" | "name"> | null;
+};
+
+const moderationFilters: Array<{ label: string; value: ProductStatus | "all" }> = [
+  { label: "All", value: "all" },
+  { label: "Active", value: "active" },
+  { label: "Draft", value: "draft" },
+  { label: "Paused", value: "paused" },
+  { label: "Archived", value: "archived" },
+];
+
+const adminProductsFilterKey = "nexcart.admin.products.filter";
+const adminProductsSearchKey = "nexcart.admin.products.search";
+const adminProductFilterValues: ReadonlyArray<ProductStatus | "all"> = ["all", "active", "draft", "paused", "archived"];
+
+export default function AdminProductsPage() {
+  const router = useRouter();
+  const addToast = useUIStore((state) => state.addToast);
+  const [products, setProducts] = useState<ModerationProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<ProductStatus | "all">("all");
+  const [search, setSearch] = useState("");
+  const [activeProductId, setActiveProductId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setFilter(loadQueuePreference(adminProductsFilterKey, adminProductFilterValues, "all"));
+    setSearch(loadQueueTextPreference(adminProductsSearchKey));
+  }, []);
+
+  useEffect(() => {
+    saveQueuePreference(adminProductsFilterKey, filter);
+  }, [filter]);
+
+  useEffect(() => {
+    saveQueuePreference(adminProductsSearchKey, search);
+  }, [search]);
+
+  const fetchProducts = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const supabase = getSupabaseBrowserClient();
+    let query = supabase
+      .from("products")
+      .select("*, store:stores(id, name, slug), category:categories(id, name)")
+      .order("created_at", { ascending: false });
+
+    if (filter !== "all") query = query.eq("status", filter);
+    if (search) query = query.ilike("name", `%${search}%`);
+
+    const { data, error: queryError } = await query;
+
+    if (queryError) {
+      setProducts([]);
+      setError(queryError.message);
+      setLoading(false);
+      return;
+    }
+
+    setProducts((data ?? []) as ModerationProduct[]);
+    setLoading(false);
+  }, [filter, search]);
+
+  useEffect(() => {
+    void fetchProducts();
+  }, [fetchProducts]);
+
+  async function updateProduct(productId: string, changes: Partial<Pick<Product, "status" | "is_featured">>) {
+    setActiveProductId(productId);
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase.from("products").update(changes).eq("id", productId);
+
+    if (error) {
+      addToast({ type: "error", title: "Moderation update failed", description: error.message });
+      setActiveProductId(null);
+      return;
+    }
+
+    addToast({
+      type: "success",
+      title: "Product updated",
+      description: "Marketplace visibility rules were applied successfully.",
+    });
+    await fetchProducts();
+    setActiveProductId(null);
+  }
+
+  const stats = useMemo(
+    () => [
+      { label: "Catalog items", value: products.length.toLocaleString() },
+      { label: "Featured", value: products.filter((product) => product.is_featured).length.toLocaleString() },
+      { label: "Paused", value: products.filter((product) => product.status === "paused").length.toLocaleString() },
+    ],
+    [products]
+  );
+
+  return (
+    <PageTransition className="space-y-6">
+      <PageIntro
+        eyebrow="Governance"
+        title="Product moderation"
+        description="Review catalog quality, elevate standout listings, and pause products that should not be merchandised right now."
+      />
+
+      <Card className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <CardTitle>Moderation snapshot</CardTitle>
+          <CardDescription>Search across the catalog, verify visibility state, and apply marketplace actions with confidence.</CardDescription>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          {stats.map((stat) => (
+            <div key={stat.label} className="border border-stone-200 bg-white px-4 py-3 dark:border-stone-800 dark:bg-stone-900">
+              <p className="text-[10px] font-medium uppercase tracking-widest text-stone-400">{stat.label}</p>
+              <p className="mt-2 text-xl font-medium text-stone-900 dark:text-white">{stat.value}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap gap-1">
+          {moderationFilters.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => setFilter(tab.value)}
+              className={`px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-colors ${
+                filter === tab.value
+                  ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900"
+                  : "text-stone-500 hover:text-stone-900 dark:hover:text-white"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <input
+          type="text"
+          placeholder="Search products..."
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          className="h-9 w-full border-b border-stone-200 bg-transparent text-sm placeholder:text-stone-400 focus:border-stone-900 focus:outline-none dark:border-stone-700 sm:w-72"
+        />
+      </div>
+
+      <Card className="overflow-hidden p-0">
+        {error ? (
+          <div className="p-6">
+            <StatePanel
+              title="We could not load the moderation catalog"
+              description={error}
+              tone="danger"
+              actionLabel="Retry moderation view"
+              onAction={() => void fetchProducts()}
+            />
+          </div>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-stone-100 dark:border-stone-800">
+                <th className="px-4 py-3 text-left text-[10px] font-medium uppercase tracking-widest text-stone-400">Product</th>
+                <th className="px-4 py-3 text-left text-[10px] font-medium uppercase tracking-widest text-stone-400">Store</th>
+                <th className="px-4 py-3 text-left text-[10px] font-medium uppercase tracking-widest text-stone-400">Status</th>
+                <th className="px-4 py-3 text-left text-[10px] font-medium uppercase tracking-widest text-stone-400">Signals</th>
+                <th className="px-4 py-3 text-right text-[10px] font-medium uppercase tracking-widest text-stone-400">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+              Array.from({ length: 6 }).map((_, index) => (
+                <tr key={index} className="border-b border-stone-50 dark:border-stone-800/50">
+                  {Array.from({ length: 5 }).map((_, cellIndex) => (
+                    <td key={cellIndex} className="px-4 py-4">
+                      <SkeletonBlock />
+                    </td>
+                  ))}
+                </tr>
+              ))
+              ) : products.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-16 text-center">
+                  <StatePanel
+                    title="No products match this moderation view"
+                    description="Try a different catalog status or search for a product to bring moderation targets back into view."
+                    icon={Package}
+                    className="border-none bg-transparent px-0 py-0 shadow-none"
+                  />
+                </td>
+              </tr>
+              ) : (
+              products.map((product) => (
+                <tr key={product.id} className="border-b border-stone-50 hover:bg-stone-50/50 dark:border-stone-800/50 dark:hover:bg-stone-800/20">
+                  <td className="px-4 py-3.5">
+                    <div>
+                      <p className="text-sm font-medium text-stone-900 dark:text-white">{product.name}</p>
+                      <p className="mt-1 text-[10px] uppercase tracking-wider text-stone-400">
+                        {product.category?.name ?? "Uncategorized"} / {formatPrice(Number(product.price))}
+                      </p>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <p className="text-sm text-stone-900 dark:text-white">{product.store?.name ?? "Unknown store"}</p>
+                    <p className="text-[10px] text-stone-400">Published {formatDate(product.created_at)}</p>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <ProductStatusBadge status={product.status} />
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-wider text-stone-500">
+                      {product.is_featured && (
+                        <ToneBadge tone="warning" className="gap-1">
+                          <Sparkles className="h-3 w-3" />
+                          Featured
+                        </ToneBadge>
+                      )}
+                      <span>{product.view_count} views</span>
+                      <span>{product.sale_count} sales</span>
+                      <span>{product.stock_quantity} in stock</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <div className="flex items-center justify-end gap-2">
+                      <Link href={`/products/${product.store_id}/${product.slug}`} target="_blank" rel="noreferrer">
+                        <Button size="sm" variant="ghost" leftIcon={<Eye className="h-3.5 w-3.5" />}>View</Button>
+                      </Link>
+                      {product.store?.slug ? (
+                        <Link href={`/vendors/${product.store.slug}`} target="_blank" rel="noreferrer">
+                          <Button size="sm" variant="ghost">Store</Button>
+                        </Link>
+                      ) : null}
+                      <Button size="sm" variant="ghost" isLoading={activeProductId === product.id} disabled={activeProductId === product.id} leftIcon={<Sparkles className="h-3.5 w-3.5" />} onClick={() => void updateProduct(product.id, { is_featured: !product.is_featured })}>
+                        {product.is_featured ? "Unfeature" : "Feature"}
+                      </Button>
+                      {product.status === "paused" ? (
+                        <Button size="sm" variant="ghost" isLoading={activeProductId === product.id} disabled={activeProductId === product.id} leftIcon={<PlayCircle className="h-3.5 w-3.5 text-emerald-600" />} onClick={() => void updateProduct(product.id, { status: "active" })}>
+                          Activate
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="ghost" isLoading={activeProductId === product.id} disabled={activeProductId === product.id} leftIcon={<PauseCircle className="h-3.5 w-3.5 text-amber-600" />} onClick={() => void updateProduct(product.id, { status: "paused" })}>
+                          Pause
+                        </Button>
+                      )}
+                      <Button size="sm" variant="ghost" isLoading={activeProductId === product.id} disabled={activeProductId === product.id} className="text-red-600 dark:text-red-300" leftIcon={<Archive className="h-3.5 w-3.5" />} onClick={() => void updateProduct(product.id, { status: "archived" })}>
+                        Archive
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+              )}
+            </tbody>
+          </table>
+        )}
+      </Card>
+      <div className="flex justify-end">
+        <Button type="button" variant="ghost" onClick={() => router.push("/admin/moderation")}>
+          Open broader moderation queue
+        </Button>
+      </div>
+    </PageTransition>
+  );
+}
