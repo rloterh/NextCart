@@ -71,6 +71,22 @@ interface TemplateFieldProps {
   onChange: (value: string) => void;
 }
 
+async function getConflictingStoreSlug(storeId: string, slug: string): Promise<{ id: string; name: string } | null> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("stores")
+    .select("id, name")
+    .eq("slug", slug)
+    .neq("id", storeId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data as { id: string; name: string } | null) ?? null;
+}
+
 function TemplateField({ label, value, helper, placeholder, onChange }: TemplateFieldProps) {
   return (
     <div>
@@ -334,6 +350,28 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
     setIsSaving(true);
     const supabase = getSupabaseBrowserClient();
     const normalizedSlug = slugify(form.slug || form.name);
+
+    try {
+      const conflictingStore = await getConflictingStoreSlug(store.id, normalizedSlug);
+      if (conflictingStore) {
+        addToast({
+          type: "error",
+          title: "Store slug already in use",
+          description: `${conflictingStore.name} is already using /vendors/${normalizedSlug}. Choose a different storefront slug before saving.`,
+        });
+        setIsSaving(false);
+        return;
+      }
+    } catch (slugError) {
+      addToast({
+        type: "error",
+        title: "Unable to verify store slug",
+        description: slugError instanceof Error ? slugError.message : "Please try again.",
+      });
+      setIsSaving(false);
+      return;
+    }
+
     const { error } = await supabase
       .from("stores")
       .update({
