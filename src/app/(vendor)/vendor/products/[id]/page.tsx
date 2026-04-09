@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { Card } from "@/components/ui/card";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { ProductEditorForm } from "@/components/vendor/product-editor-form";
 import { useAuth } from "@/hooks/use-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -39,28 +41,31 @@ export default function VendorProductDetailPage() {
   }, [authLoading, id, store]);
 
   if (authLoading || loading) {
-    return <div className="h-96 animate-pulse bg-stone-100 dark:bg-stone-800" />;
+    return (
+      <div className="space-y-6">
+        <Card className="space-y-4">
+          <SkeletonBlock lines={3} />
+        </Card>
+      </div>
+    );
   }
 
   if (!store) {
     return (
-      <div className="border border-dashed border-stone-200 bg-white p-10 text-center dark:border-stone-800 dark:bg-stone-900">
-        <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Store access unavailable</h1>
-        <p className="mt-3 text-sm text-stone-500">
-          A vendor store record is required before you can edit products.
-        </p>
-      </div>
+      <StatePanel
+        title="Store access unavailable"
+        description="A vendor store record is required before you can edit products."
+        tone="warning"
+      />
     );
   }
 
   if (!product) {
     return (
-      <div className="border border-dashed border-stone-200 bg-white p-10 text-center dark:border-stone-800 dark:bg-stone-900">
-        <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Product not found</h1>
-        <p className="mt-3 text-sm text-stone-500">
-          This listing may have been removed or it does not belong to the current vendor account.
-        </p>
-      </div>
+      <StatePanel
+        title="Product not found"
+        description="This listing may have been removed or it does not belong to the current vendor account."
+      />
     );
   }
 

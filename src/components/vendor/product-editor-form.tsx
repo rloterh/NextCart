@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import { ArrowLeft, Boxes, ImagePlus, Package, Plus, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PageIntro, PageTransition } from "@/components/ui/page-shell";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useAuth } from "@/hooks/use-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { uploadProductImage } from "@/lib/supabase/storage";
@@ -364,20 +365,30 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
   }
 
   if (authLoading) {
-    return <div className="h-96 animate-pulse bg-stone-100 dark:bg-stone-800" />;
+    return (
+      <PageTransition className="mx-auto max-w-5xl space-y-6">
+        <Card className="space-y-4">
+          <SkeletonBlock lines={4} />
+        </Card>
+        <Card className="space-y-4">
+          <SkeletonBlock lines={8} />
+        </Card>
+      </PageTransition>
+    );
   }
 
   if (!store) {
     return (
-      <div className="border border-dashed border-stone-200 bg-white p-10 text-center dark:border-stone-800 dark:bg-stone-900">
-        <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Store access unavailable</h1>
-        <p className="mt-3 text-sm text-stone-500">A vendor store record is required before you can manage catalog listings.</p>
-      </div>
+      <StatePanel
+        title="Store access unavailable"
+        description="A vendor store record is required before you can manage catalog listings."
+        tone="warning"
+      />
     );
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-5xl space-y-6">
+    <PageTransition className="mx-auto max-w-5xl space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link href="/vendor/products">
@@ -386,12 +397,15 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
             </button>
           </Link>
           <div>
-            <h1 className="font-serif text-2xl text-stone-900 dark:text-white">{mode === "create" ? "Create product" : "Edit product"}</h1>
-            <p className="mt-1 text-sm text-stone-500">
-              {mode === "create"
-                ? "Launch a polished listing with pricing, inventory, variants, and editorial media."
-                : "Refine merchandising, inventory, and publishing details without leaving the vendor workspace."}
-            </p>
+            <PageIntro
+              title={mode === "create" ? "Create product" : "Edit product"}
+              description={
+                mode === "create"
+                  ? "Launch a polished listing with pricing, inventory, variants, and editorial media."
+                  : "Refine merchandising, inventory, and publishing details without leaving the vendor workspace."
+              }
+              className="border-none bg-transparent p-0 shadow-none"
+            />
           </div>
         </div>
 
@@ -627,6 +641,6 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
           </Card>
         </div>
       </form>
-    </motion.div>
+    </PageTransition>
   );
 }
