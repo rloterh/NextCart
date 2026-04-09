@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Store, Users, Package, Shield, ArrowLeft, ClipboardList, Scale, ScrollText } from "lucide-react";
+import { LayoutDashboard, Store, Users, Package, Shield, ArrowLeft, ClipboardList, Scale, ScrollText, Activity } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 const adminNav = [
@@ -12,6 +12,7 @@ const adminNav = [
   { label: "Vendors", href: "/admin/vendors", icon: Store },
   { label: "Orders", href: "/admin/orders", icon: ClipboardList },
   { label: "Audit", href: "/admin/audit", icon: ScrollText },
+  { label: "System", href: "/admin/system", icon: Activity },
   { label: "Users", href: "/admin/users", icon: Users },
   { label: "Products", href: "/admin/products", icon: Package },
 ];
