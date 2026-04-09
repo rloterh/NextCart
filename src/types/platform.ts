@@ -8,7 +8,8 @@ export type PlatformCapabilityId =
   | "stripe_server"
   | "stripe_checkout"
   | "stripe_vendor_payouts"
-  | "stripe_webhooks";
+  | "stripe_webhooks"
+  | "notification_delivery";
 
 export interface PlatformCapabilityCheck {
   id: PlatformCapabilityId;
@@ -52,6 +53,7 @@ export interface PlatformReadinessPayload {
 }
 
 export type PlatformNotificationTone = "info" | "success" | "warning" | "danger" | "muted";
+export type PlatformNotificationState = "unread" | "read" | "archived";
 
 export interface PlatformEventTemplate {
   key: PlatformEventKey;
@@ -67,9 +69,12 @@ export interface PlatformInboxItem {
   eventKey: PlatformEventKey;
   audience: PlatformAudience;
   tone: PlatformNotificationTone;
+  state: PlatformNotificationState;
   title: string;
   description: string;
   createdAt: string;
+  readAt: string | null;
+  archivedAt: string | null;
   href: string | null;
   actionLabel: string | null;
   channels: PlatformEventChannel[];
@@ -80,9 +85,38 @@ export interface PlatformInboxSummary {
   total: number;
   urgent: number;
   attention: number;
+  unread: number;
 }
 
 export interface PlatformInboxPayload {
   items: PlatformInboxItem[];
   summary: PlatformInboxSummary;
+  persistenceAvailable: boolean;
+  emailDeliveryAvailable: boolean;
+}
+
+export interface PlatformNotificationStateRecord {
+  user_id: string;
+  item_id: string;
+  state: PlatformNotificationState;
+  read_at: string | null;
+  archived_at: string | null;
+  updated_at?: string;
+}
+
+export interface PlatformDigestSection {
+  id: string;
+  label: string;
+  value: string;
+  description: string;
+  tone: PlatformNotificationTone;
+}
+
+export interface PlatformDigestPayload {
+  audience: Exclude<PlatformAudience, "buyer">;
+  title: string;
+  summary: string;
+  sections: PlatformDigestSection[];
+  inboxPreview: PlatformInboxItem[];
+  emailDeliveryAvailable: boolean;
 }

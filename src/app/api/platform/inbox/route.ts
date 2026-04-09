@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { getDisputeSlaState, isActiveDispute } from "@/lib/admin/governance";
 import {
+  applyNotificationStateToItems,
+  buildNotificationStateUpdate,
+  isMissingNotificationStateTable,
+} from "@/lib/platform/inbox-state";
+import {
   createInboxPayload,
   createPlatformInboxItem,
   getDisputeInboxTone,
@@ -11,10 +16,12 @@ import {
 import { getPayoutAnomaly, getPayoutState } from "@/lib/orders/payout-state";
 import { renderOrderCommunicationTemplate } from "@/lib/orders/communication-templates";
 import { orderStatusCopy } from "@/lib/orders/status-copy";
+import { getServerPlatformChecks } from "@/lib/platform/readiness.server";
 import { getStoreProfileContent } from "@/lib/storefront/store-profile";
 import { getSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
 import type { AdminAction, DisputeCase, Profile, Store } from "@/types";
 import type { Order } from "@/types/orders";
+import type { PlatformInboxItem, PlatformNotificationState, PlatformNotificationStateRecord } from "@/types/platform";
 
 type InboxProfile = Pick<Profile, "id" | "role" | "full_name" | "email">;
 type InboxStore = Pick<Store, "id" | "name" | "slug" | "status" | "settings">;
@@ -57,6 +64,51 @@ type ModerationActionRecord = Pick<
   AdminAction,
   "id" | "action" | "entity_type" | "entity_id" | "reason" | "metadata" | "created_at"
 >;
+
+function getEmailDeliveryAvailable() {
+  return getServerPlatformChecks().some(
+    (check) => check.id === "notification_delivery" && check.status !== "blocked"
+  );
+}
+
+async function fetchNotificationStates(
+  userId: string
+): Promise<{ records: PlatformNotificationStateRecord[]; available: boolean }> {
+  const supabase = await getSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("notification_states")
+    .select("user_id, item_id, state, read_at, archived_at, updated_at")
+    .eq("user_id", userId);
+
+  if (error) {
+    if (isMissingNotificationStateTable(error.message)) {
+      return { records: [], available: false };
+    }
+
+    throw new Error(error.message);
+  }
+
+  return {
+    records: (data ?? []) as PlatformNotificationStateRecord[],
+    available: true,
+  };
+}
+
+async function createInboxResponse(
+  userId: string,
+  items: PlatformInboxItem[]
+) {
+  const emailDeliveryAvailable = getEmailDeliveryAvailable();
+  const notificationState = await fetchNotificationStates(userId);
+
+  return createInboxPayload(
+    applyNotificationStateToItems(items, notificationState.records),
+    {
+      persistenceAvailable: notificationState.available,
+      emailDeliveryAvailable,
+    }
+  );
+}
 
 function unwrapRelation<T>(value: T | T[] | null | undefined) {
   if (Array.isArray(value)) {
@@ -540,7 +592,8 @@ export async function GET() {
     }
 
     return NextResponse.json(
-      createInboxPayload(
+      await createInboxResponse(
+        currentProfile.id,
         buildBuyerItems(
           normalizeBuyerOrders(
             ((data ?? []) as unknown as Array<
@@ -560,7 +613,12 @@ export async function GET() {
       .single();
 
     if (storeError || !store) {
-      return NextResponse.json(createInboxPayload([]));
+      return NextResponse.json(
+        createInboxPayload([], {
+          persistenceAvailable: false,
+          emailDeliveryAvailable: getEmailDeliveryAvailable(),
+        })
+      );
     }
 
     const currentStore = store as InboxStore;
@@ -592,7 +650,8 @@ export async function GET() {
     }
 
     return NextResponse.json(
-      createInboxPayload(
+      await createInboxResponse(
+        currentProfile.id,
         buildVendorItems({
           orders: normalizeVendorOrders(
             ((ordersRes.data ?? []) as unknown as Array<
@@ -639,7 +698,8 @@ export async function GET() {
   }
 
   return NextResponse.json(
-    createInboxPayload(
+    await createInboxResponse(
+      currentProfile.id,
       buildAdminItems({
         orders: normalizeVendorOrders(
           ((ordersRes.data ?? []) as unknown as Array<
@@ -658,4 +718,47 @@ export async function GET() {
       }).slice(0, 12)
     )
   );
+}
+
+export async function PATCH(request: Request) {
+  const user = await getServerUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const payload = (await request.json().catch(() => null)) as
+    | { itemId?: string; itemIds?: string[]; state?: PlatformNotificationState }
+    | null;
+
+  const state = payload?.state;
+  const itemIds = payload?.itemIds ?? (payload?.itemId ? [payload.itemId] : []);
+
+  if (!state || !["unread", "read", "archived"].includes(state) || itemIds.length === 0) {
+    return NextResponse.json(
+      { error: "Provide a notification state and at least one item id." },
+      { status: 400 }
+    );
+  }
+
+  const supabase = await getSupabaseServerClient();
+  const updates = itemIds.map((itemId) => buildNotificationStateUpdate(user.id, itemId, state));
+  const { error } = await supabase
+    .from("notification_states")
+    .upsert(updates, { onConflict: "user_id,item_id" });
+
+  if (error) {
+    if (isMissingNotificationStateTable(error.message)) {
+      return NextResponse.json(
+        {
+          error:
+            "Notification persistence is not ready yet. Apply supabase-notification-state-schema.sql before changing inbox state.",
+        },
+        { status: 503 }
+      );
+    }
+
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  return NextResponse.json({ success: true });
 }

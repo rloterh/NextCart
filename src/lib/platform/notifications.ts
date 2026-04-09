@@ -1,5 +1,6 @@
 import { PLATFORM_EVENT_DEFINITIONS } from "@/lib/platform/readiness.shared";
 import { getDisputeSlaState } from "@/lib/admin/governance";
+import { summarizeInboxItems } from "@/lib/platform/inbox-state";
 import type { OrderStatus, PayoutHoldStatus, RefundDecision } from "@/types";
 import type {
   PlatformAudience,
@@ -7,7 +8,6 @@ import type {
   PlatformEventTemplate,
   PlatformInboxItem,
   PlatformInboxPayload,
-  PlatformInboxSummary,
   PlatformNotificationTone,
 } from "@/types/platform";
 
@@ -145,9 +145,12 @@ export function createPlatformInboxItem({
     eventKey,
     audience,
     tone,
+    state: "unread",
     title,
     description,
     createdAt,
+    readAt: null,
+    archivedAt: null,
     href: href ?? null,
     actionLabel: actionLabel ?? null,
     channels: definition?.channels ?? [],
@@ -155,23 +158,10 @@ export function createPlatformInboxItem({
   };
 }
 
-export function summarizeInboxItems(items: PlatformInboxItem[]): PlatformInboxSummary {
-  return items.reduce<PlatformInboxSummary>(
-    (summary, item) => {
-      summary.total += 1;
-      if (item.tone === "danger") {
-        summary.urgent += 1;
-      }
-      if (item.tone === "warning") {
-        summary.attention += 1;
-      }
-      return summary;
-    },
-    { total: 0, urgent: 0, attention: 0 }
-  );
-}
-
-export function createInboxPayload(items: PlatformInboxItem[]): PlatformInboxPayload {
+export function createInboxPayload(
+  items: PlatformInboxItem[],
+  options?: { persistenceAvailable?: boolean; emailDeliveryAvailable?: boolean }
+): PlatformInboxPayload {
   const sorted = [...items].sort(
     (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
   );
@@ -179,6 +169,8 @@ export function createInboxPayload(items: PlatformInboxItem[]): PlatformInboxPay
   return {
     items: sorted,
     summary: summarizeInboxItems(sorted),
+    persistenceAvailable: options?.persistenceAvailable ?? false,
+    emailDeliveryAvailable: options?.emailDeliveryAvailable ?? false,
   };
 }
 

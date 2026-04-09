@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, ChevronRight } from "lucide-react";
+import { Archive, Bell, Check, ChevronRight, RotateCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { ToneBadge } from "@/components/ui/status-badge";
 import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { usePlatformInbox } from "@/hooks/use-platform-inbox";
@@ -35,7 +36,7 @@ function getTone(tone: PlatformInboxItem["tone"]) {
 export function NotificationCenter() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const { data, loading, error, refetch } = usePlatformInbox(true);
+  const { data, loading, error, refetch, updateItemsState, updatingIds } = usePlatformInbox(true);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -59,7 +60,7 @@ export function NotificationCenter() {
   }, []);
 
   const visibleItems = data?.items.slice(0, 6) ?? [];
-  const badgeCount = (data?.summary.urgent ?? 0) + (data?.summary.attention ?? 0);
+  const badgeCount = data?.summary.unread ?? 0;
 
   return (
     <div ref={ref} className="relative">
@@ -102,7 +103,7 @@ export function NotificationCenter() {
                 </div>
                 <div className="text-right text-xs text-stone-500">
                   <p>{data?.summary.total ?? 0} total</p>
-                  <p>{data?.summary.urgent ?? 0} urgent</p>
+                  <p>{data?.summary.unread ?? 0} unread</p>
                 </div>
               </div>
             </div>
@@ -133,7 +134,13 @@ export function NotificationCenter() {
                 </div>
               ) : (
                 <div className="space-y-2">
+                  {!data?.persistenceAvailable ? (
+                    <div className="rounded-sm border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+                      Notification persistence is not fully configured yet. Apply <code>supabase-notification-state-schema.sql</code> to keep read and archive state across sessions.
+                    </div>
+                  ) : null}
                   {visibleItems.map((item) => {
+                    const isUpdating = updatingIds.includes(item.id);
                     const content = (
                       <div className="rounded-sm border border-stone-200 px-3 py-3 transition-colors hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-stone-900/60">
                         <div className="flex items-start justify-between gap-3">
@@ -144,22 +151,50 @@ export function NotificationCenter() {
                           <p className="text-[11px] uppercase tracking-wider text-stone-400">{formatTimestamp(item.createdAt)}</p>
                         </div>
                         <p className="mt-2 text-sm leading-relaxed text-stone-500">{item.description}</p>
-                        {item.actionLabel ? (
-                          <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-[0.16em] text-stone-500">
-                            {item.actionLabel}
-                            <ChevronRight className="h-3.5 w-3.5" />
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                          {item.href && item.actionLabel ? (
+                            <Link
+                              href={item.href}
+                              onClick={() => setOpen(false)}
+                              className="inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-[0.16em] text-stone-500"
+                            >
+                              {item.actionLabel}
+                              <ChevronRight className="h-3.5 w-3.5" />
+                            </Link>
+                          ) : <span />}
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              isLoading={isUpdating}
+                              onClick={async (event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                await updateItemsState([item.id], item.state === "unread" ? "read" : "unread");
+                              }}
+                              leftIcon={item.state === "unread" ? <Check className="h-3.5 w-3.5" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                            >
+                              {item.state === "unread" ? "Mark read" : "Unread"}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              isLoading={isUpdating}
+                              onClick={async (event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                await updateItemsState([item.id], "archived");
+                              }}
+                              leftIcon={<Archive className="h-3.5 w-3.5" />}
+                            >
+                              Archive
+                            </Button>
                           </div>
-                        ) : null}
+                        </div>
                       </div>
                     );
-
-                    if (item.href) {
-                      return (
-                        <Link key={item.id} href={item.href} onClick={() => setOpen(false)}>
-                          {content}
-                        </Link>
-                      );
-                    }
 
                     return <div key={item.id}>{content}</div>;
                   })}
