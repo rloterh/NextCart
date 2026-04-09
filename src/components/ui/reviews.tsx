@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, MessageSquare, Sparkles, Star, ThumbsUp } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StarRating } from "@/components/ui/star-rating";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useAuth } from "@/hooks/use-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatDate } from "@/lib/utils/constants";
@@ -19,6 +20,7 @@ interface ReviewFormProps {
 }
 
 export function ReviewForm({ productId, storeId, onSubmitted }: ReviewFormProps) {
+  const prefersReducedMotion = useReducedMotion();
   const { isAuthenticated, profile } = useAuth();
   const addToast = useUIStore((state) => state.addToast);
   const [isOpen, setIsOpen] = useState(false);
@@ -79,7 +81,13 @@ export function ReviewForm({ productId, storeId, onSubmitted }: ReviewFormProps)
           Write a review
         </Button>
       ) : (
-        <motion.form initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} onSubmit={handleSubmit} className="space-y-4">
+        <motion.form
+          initial={prefersReducedMotion ? false : { opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.2, ease: "easeOut" }}
+          onSubmit={handleSubmit}
+          className="space-y-4"
+        >
           <div>
             <p className="mb-2 text-xs font-medium uppercase tracking-widest text-stone-400">Your rating</p>
             <StarRating value={rating} onChange={setRating} size="lg" />
@@ -154,70 +162,71 @@ export function ReviewList({ productId, refreshKey }: ReviewListProps) {
   const [votedReviewIds, setVotedReviewIds] = useState<string[]>([]);
   const [helpfulReviewId, setHelpfulReviewId] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchReviews() {
-      setLoading(true);
-      setError(null);
+  const fetchReviews = useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-      const supabase = getSupabaseBrowserClient();
-      const { data, error: queryError } = await supabase
-        .from("reviews")
-        .select("*, profile:profiles(full_name, avatar_url)")
-        .eq("product_id", productId)
-        .eq("is_visible", true)
-        .order("created_at", { ascending: false });
+    const supabase = getSupabaseBrowserClient();
+    const { data, error: queryError } = await supabase
+      .from("reviews")
+      .select("*, profile:profiles(full_name, avatar_url)")
+      .eq("product_id", productId)
+      .eq("is_visible", true)
+      .order("created_at", { ascending: false });
 
-      if (queryError) {
-        setError(queryError.message);
-        setReviews([]);
-        setStats(emptyStats);
-        setLoading(false);
-        return;
-      }
-
-      const nextReviews = (data ?? []) as Review[];
-      const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-      let verifiedCount = 0;
-      let recommendedCount = 0;
-
-      nextReviews.forEach((review) => {
-        distribution[review.rating] = (distribution[review.rating] ?? 0) + 1;
-        if (review.is_verified_purchase) {
-          verifiedCount += 1;
-        }
-        if (review.rating >= 4) {
-          recommendedCount += 1;
-        }
-      });
-
-      const average = nextReviews.length > 0 ? nextReviews.reduce((sum, review) => sum + review.rating, 0) / nextReviews.length : 0;
-
-      setReviews(nextReviews);
-      setStats({
-        average,
-        total: nextReviews.length,
-        distribution,
-        verifiedCount,
-        recommendationRate: nextReviews.length > 0 ? Math.round((recommendedCount / nextReviews.length) * 100) : 0,
-      });
-
-      if (isAuthenticated && profile?.id && nextReviews.length > 0) {
-        const { data: helpfulVotes } = await supabase
-          .from("review_helpful_votes")
-          .select("review_id")
-          .eq("user_id", profile.id)
-          .in("review_id", nextReviews.map((review) => review.id));
-
-        setVotedReviewIds((helpfulVotes ?? []).map((vote) => vote.review_id as string));
-      } else {
-        setVotedReviewIds([]);
-      }
-
+    if (queryError) {
+      setError(queryError.message);
+      setReviews([]);
+      setStats(emptyStats);
       setLoading(false);
+      return;
     }
 
+    const nextReviews = (data ?? []) as Review[];
+    const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let verifiedCount = 0;
+    let recommendedCount = 0;
+
+    nextReviews.forEach((review) => {
+      distribution[review.rating] = (distribution[review.rating] ?? 0) + 1;
+      if (review.is_verified_purchase) {
+        verifiedCount += 1;
+      }
+      if (review.rating >= 4) {
+        recommendedCount += 1;
+      }
+    });
+
+    const average =
+      nextReviews.length > 0 ? nextReviews.reduce((sum, review) => sum + review.rating, 0) / nextReviews.length : 0;
+
+    setReviews(nextReviews);
+    setStats({
+      average,
+      total: nextReviews.length,
+      distribution,
+      verifiedCount,
+      recommendationRate: nextReviews.length > 0 ? Math.round((recommendedCount / nextReviews.length) * 100) : 0,
+    });
+
+    if (isAuthenticated && profile?.id && nextReviews.length > 0) {
+      const { data: helpfulVotes } = await supabase
+        .from("review_helpful_votes")
+        .select("review_id")
+        .eq("user_id", profile.id)
+        .in("review_id", nextReviews.map((review) => review.id));
+
+      setVotedReviewIds((helpfulVotes ?? []).map((vote) => vote.review_id as string));
+    } else {
+      setVotedReviewIds([]);
+    }
+
+    setLoading(false);
+  }, [isAuthenticated, productId, profile?.id]);
+
+  useEffect(() => {
     void fetchReviews();
-  }, [isAuthenticated, productId, profile?.id, refreshKey]);
+  }, [fetchReviews, refreshKey]);
 
   const headline = useMemo(() => {
     if (stats.total === 0) {
@@ -239,7 +248,9 @@ export function ReviewList({ productId, refreshKey }: ReviewListProps) {
     return (
       <div className="space-y-4">
         {Array.from({ length: 3 }).map((_, index) => (
-          <div key={index} className="h-24 animate-pulse bg-stone-100 dark:bg-stone-800" />
+          <div key={index} className="border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+            <SkeletonBlock lines={3} />
+          </div>
         ))}
       </div>
     );
@@ -247,9 +258,13 @@ export function ReviewList({ productId, refreshKey }: ReviewListProps) {
 
   if (error) {
     return (
-      <div className="border border-red-200 bg-red-50 px-4 py-5 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
-        We could not load reviews right now. {error}
-      </div>
+      <StatePanel
+        title="We could not load reviews right now"
+        description={error}
+        tone="danger"
+        actionLabel="Retry"
+        onAction={() => void fetchReviews()}
+      />
     );
   }
 
@@ -345,10 +360,10 @@ export function ReviewList({ productId, refreshKey }: ReviewListProps) {
       </div>
 
       {reviews.length === 0 ? (
-        <div className="border border-dashed border-stone-200 px-6 py-10 text-center dark:border-stone-700">
-          <p className="font-serif text-xl text-stone-900 dark:text-white">No reviews yet</p>
-          <p className="mt-2 text-sm text-stone-500">Be the first buyer to share quality, shipping, and packaging feedback for this product.</p>
-        </div>
+        <StatePanel
+          title="No reviews yet"
+          description="Be the first buyer to share quality, shipping, and packaging feedback for this product."
+        />
       ) : (
         <div className="space-y-6">
           {reviews.map((review) => (

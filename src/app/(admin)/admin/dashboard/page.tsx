@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import { AlertTriangle, Clock3, DollarSign, EyeOff, Package, Scale, ShieldAlert, ShoppingCart, Store, TrendingUp, Users } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PageIntro, PageTransition } from "@/components/ui/page-shell";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { getDisputeSlaState, isActiveDispute } from "@/lib/admin/governance";
 import { isExceptionStatus, isReturnStatus } from "@/lib/orders/operations-metrics";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -54,8 +54,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetch() {
+  const fetchDashboard = useCallback(async () => {
       setLoading(true);
       setError(null);
       const sb = getSupabaseBrowserClient();
@@ -151,10 +150,11 @@ export default function AdminDashboard() {
           .slice(0, 6)
       );
       setLoading(false);
-    }
+    }, []);
 
-    void fetch();
-  }, []);
+  useEffect(() => {
+    void fetchDashboard();
+  }, [fetchDashboard]);
 
   const kpis = [
     { label: "Total users", value: stats.users.toLocaleString(), icon: Users, color: "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400" },
@@ -179,28 +179,38 @@ export default function AdminDashboard() {
     { label: "Suspended vendors", value: stats.suspendedVendors, detail: "stores currently restricted from trading", icon: Store, href: "/admin/vendors" },
   ];
 
-  if (loading) return <div className="grid gap-4 sm:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-28 animate-pulse bg-stone-100 dark:bg-stone-800" />)}</div>;
+  if (loading) {
+    return (
+      <PageTransition>
+        <PageIntro title="Platform overview" description="Monitor marketplace growth alongside trust, risk, and settlement health." />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Card key={i} className="space-y-3 p-5">
+              <SkeletonBlock lines={3} />
+            </Card>
+          ))}
+        </div>
+      </PageTransition>
+    );
+  }
   if (error) {
     return (
-      <Card className="space-y-4 p-5">
-        <div>
-          <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Platform overview</h1>
-          <p className="mt-1 text-sm text-stone-500">We could not load the latest governance overview right now.</p>
-        </div>
-        <p className="text-sm text-red-600 dark:text-red-300">{error}</p>
-        <Button size="sm" onClick={() => window.location.reload()}>
-          Retry overview
-        </Button>
-      </Card>
+      <PageTransition>
+        <PageIntro title="Platform overview" description="Monitor marketplace growth alongside trust, risk, and settlement health." />
+        <StatePanel
+          title="We could not load the latest governance overview"
+          description={error}
+          tone="danger"
+          actionLabel="Retry overview"
+          onAction={() => void fetchDashboard()}
+        />
+      </PageTransition>
     );
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <div>
-        <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Platform overview</h1>
-        <p className="mt-1 text-sm text-stone-500">Monitor marketplace growth alongside trust, risk, and settlement health.</p>
-      </div>
+    <PageTransition>
+      <PageIntro title="Platform overview" description="Monitor marketplace growth alongside trust, risk, and settlement health." />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {kpis.map((kpi) => (
@@ -238,9 +248,12 @@ export default function AdminDashboard() {
 
           <div className="mt-6 space-y-3">
             {riskQueue.length === 0 ? (
-              <div className="border border-dashed border-stone-200 p-6 text-sm text-stone-500 dark:border-stone-800">
-                No stores are currently surfacing exception or payout risk signals.
-              </div>
+              <StatePanel
+                title="No stores are currently surfacing risk pressure"
+                description="Exception, return, and payout alerts are clear across the marketplace right now."
+                icon={ShieldAlert}
+                className="border-dashed"
+              />
             ) : (
               riskQueue.map((item) => (
                 <div key={item.storeId} className="border border-stone-200 p-4 dark:border-stone-800">
@@ -297,6 +310,6 @@ export default function AdminDashboard() {
           </Link>
         ))}
       </div>
-    </motion.div>
+    </PageTransition>
   );
 }

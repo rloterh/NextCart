@@ -5,6 +5,9 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Archive, Eye, Package, PauseCircle, PlayCircle, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { ProductStatusBadge, ToneBadge } from "@/components/ui/status-badge";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useUIStore } from "@/stores/ui-store";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatDate, formatPrice } from "@/lib/utils/constants";
@@ -22,13 +25,6 @@ const moderationFilters: Array<{ label: string; value: ProductStatus | "all" }> 
   { label: "Paused", value: "paused" },
   { label: "Archived", value: "archived" },
 ];
-
-const statusStyles: Record<ProductStatus, string> = {
-  active: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400",
-  draft: "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400",
-  paused: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400",
-  archived: "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400",
-};
 
 export default function AdminProductsPage() {
   const addToast = useUIStore((state) => state.addToast);
@@ -89,12 +85,12 @@ export default function AdminProductsPage() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+      <Card className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Product moderation</h1>
-          <p className="mt-1 text-sm text-stone-500">
+          <CardTitle>Product moderation</CardTitle>
+          <CardDescription>
             Review catalog quality, elevate standout listings, and pause products that should not be merchandised right now.
-          </p>
+          </CardDescription>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -105,7 +101,7 @@ export default function AdminProductsPage() {
             </div>
           ))}
         </div>
-      </div>
+      </Card>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-1">
@@ -132,7 +128,7 @@ export default function AdminProductsPage() {
         />
       </div>
 
-      <div className="border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+      <Card className="overflow-hidden p-0">
         <table className="w-full">
           <thead>
             <tr className="border-b border-stone-100 dark:border-stone-800">
@@ -149,7 +145,7 @@ export default function AdminProductsPage() {
                 <tr key={index} className="border-b border-stone-50 dark:border-stone-800/50">
                   {Array.from({ length: 5 }).map((_, cellIndex) => (
                     <td key={cellIndex} className="px-4 py-4">
-                      <div className="h-4 animate-pulse bg-stone-100 dark:bg-stone-800" />
+                      <SkeletonBlock />
                     </td>
                   ))}
                 </tr>
@@ -157,8 +153,12 @@ export default function AdminProductsPage() {
             ) : products.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-16 text-center">
-                  <Package className="mx-auto mb-3 h-8 w-8 text-stone-300" />
-                  <p className="text-sm text-stone-400">No products match this moderation view.</p>
+                  <StatePanel
+                    title="No products match this moderation view"
+                    description="Try a different catalog status or search for a product to bring moderation targets back into view."
+                    icon={Package}
+                    className="border-none bg-transparent px-0 py-0 shadow-none"
+                  />
                 </td>
               </tr>
             ) : (
@@ -177,18 +177,15 @@ export default function AdminProductsPage() {
                     <p className="text-[10px] text-stone-400">Published {formatDate(product.created_at)}</p>
                   </td>
                   <td className="px-4 py-3.5">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusStyles[product.status]}`}>
-                      <span className="h-1 w-1 rounded-full bg-current" />
-                      {product.status}
-                    </span>
+                    <ProductStatusBadge status={product.status} />
                   </td>
                   <td className="px-4 py-3.5">
                     <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-wider text-stone-500">
                       {product.is_featured && (
-                        <span className="inline-flex items-center gap-1 border border-amber-200 px-2 py-1 text-amber-700 dark:border-amber-900/40 dark:text-amber-400">
+                        <ToneBadge tone="warning" className="gap-1">
                           <Sparkles className="h-3 w-3" />
                           Featured
-                        </span>
+                        </ToneBadge>
                       )}
                       <span>{product.view_count} views</span>
                       <span>{product.sale_count} sales</span>
@@ -222,7 +219,7 @@ export default function AdminProductsPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
     </motion.div>
   );
 }

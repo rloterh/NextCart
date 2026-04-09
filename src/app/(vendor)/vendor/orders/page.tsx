@@ -2,8 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import { Eye, Package } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { PageIntro, PageTransition } from "@/components/ui/page-shell";
+import { OrderStatusBadge, ToneBadge } from "@/components/ui/status-badge";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useAuth } from "@/hooks/use-auth";
 import { getPayoutState } from "@/lib/orders/payout-state";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -39,24 +43,6 @@ const savedViews = [
 ] as const;
 
 type OrderSavedView = (typeof savedViews)[number]["value"];
-
-const statusColors: Record<OrderStatus, string> = {
-  pending: "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400",
-  confirmed: "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400",
-  processing: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400",
-  packed: "bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300",
-  shipped: "bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400",
-  out_for_delivery: "bg-cyan-50 text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-300",
-  delivery_failed: "bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300",
-  reshipping: "bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-900/20 dark:text-fuchsia-300",
-  delivered: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400",
-  return_initiated: "bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300",
-  return_approved: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300",
-  return_in_transit: "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300",
-  return_received: "bg-lime-50 text-lime-700 dark:bg-lime-900/20 dark:text-lime-300",
-  cancelled: "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400",
-  refunded: "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400",
-};
 
 type VendorOrderListItem = Pick<Order, "id" | "order_number" | "status" | "created_at" | "total" | "stripe_transfer_id" | "stripe_transfer_status"> & {
   buyer: Pick<Profile, "full_name" | "email"> | null;
@@ -158,28 +144,38 @@ export default function VendorOrdersPage() {
   if (authLoading) {
     return (
       <div className="space-y-6">
-        <div className="h-8 w-56 animate-pulse bg-stone-100 dark:bg-stone-800" />
-        <div className="h-80 animate-pulse bg-stone-100 dark:bg-stone-800" />
+        <Card className="space-y-4 p-6">
+          <SkeletonBlock lines={2} />
+        </Card>
+        <Card className="space-y-3 p-6">
+          <SkeletonBlock lines={6} />
+        </Card>
       </div>
     );
   }
 
   if (!store) {
     return (
-      <div className="rounded-none border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
-        Store access is unavailable for this account. Finish your store setup to manage orders.
-      </div>
+      <StatePanel
+        tone="warning"
+        title="Store access is unavailable"
+        description="Finish your store setup to unlock operational order management and fulfillment controls."
+      />
     );
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <div>
-        <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Orders</h1>
-        <p className="mt-1 text-sm text-stone-500">
-          {visibleOrders.length} of {orders.length} order{orders.length !== 1 ? "s" : ""}
-        </p>
-      </div>
+    <PageTransition>
+      <PageIntro
+        title="Orders"
+        description="Run daily fulfillment, payout review, and exception handling from one operational queue."
+        className="border-stone-200/70 bg-stone-50/80 dark:border-stone-800 dark:bg-stone-900/60"
+        actions={
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-400">
+            {visibleOrders.length} of {orders.length} order{orders.length !== 1 ? "s" : ""}
+          </p>
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         {savedViews.map((view) => (
@@ -220,7 +216,7 @@ export default function VendorOrdersPage() {
         />
       </div>
 
-      <div className="border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+      <Card className="overflow-hidden border-stone-200/80 bg-white p-0 dark:border-stone-800 dark:bg-stone-900">
         <table className="w-full">
           <thead>
             <tr className="border-b border-stone-100 dark:border-stone-800">
@@ -238,22 +234,31 @@ export default function VendorOrdersPage() {
                 <tr key={rowIndex} className="border-b border-stone-50 dark:border-stone-800/50">
                   {Array.from({ length: 6 }).map((_, cellIndex) => (
                     <td key={cellIndex} className="px-4 py-3.5">
-                      <div className="h-4 animate-pulse bg-stone-100 dark:bg-stone-800" />
+                      <div className="h-4 animate-pulse rounded-sm bg-stone-100 dark:bg-stone-800" />
                     </td>
                   ))}
                 </tr>
               ))
             ) : error ? (
               <tr>
-                <td colSpan={6} className="px-4 py-16 text-center text-sm text-red-600 dark:text-red-300">
-                  We could not load your orders right now. {error}
+                <td colSpan={6} className="px-4 py-8">
+                  <StatePanel
+                    tone="danger"
+                    title="We could not load your orders"
+                    description={error}
+                    actionLabel="Try again"
+                    onAction={() => void fetchOrders()}
+                  />
                 </td>
               </tr>
             ) : visibleOrders.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-16 text-center">
-                  <Package className="mx-auto mb-3 h-8 w-8 text-stone-300" />
-                  <p className="text-sm text-stone-400">No orders match this operational view</p>
+                <td colSpan={6} className="px-4 py-8">
+                  <StatePanel
+                    title="No orders match this operational view"
+                    description="Try another saved view, clear your status filter, or search for a different buyer or order number."
+                    icon={Package}
+                  />
                 </td>
               </tr>
             ) : (
@@ -268,25 +273,22 @@ export default function VendorOrdersPage() {
                     <p className="text-xs text-stone-500">{order.buyer?.email ?? "No buyer email"}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusColors[order.status]}`}>
-                      <span className="h-1 w-1 rounded-full bg-current" />
-                      {order.status.replaceAll("_", " ")}
-                    </span>
+                    <OrderStatusBadge status={order.status} />
                   </td>
                   <td className="px-4 py-3 text-sm text-stone-500">{formatDate(order.created_at)}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="space-y-1">
                       <p className="text-sm font-medium text-stone-900 dark:text-white">{formatPrice(Number(order.total))}</p>
-                      <p className="text-[10px] uppercase tracking-wider text-stone-400">
+                      <ToneBadge tone={order.stripe_transfer_status === "paid" ? "success" : "muted"}>
                         {getPayoutState(order.status, order.stripe_transfer_id, order.stripe_transfer_status).label}
-                      </p>
+                      </ToneBadge>
                     </div>
                   </td>
                   <td className="px-4 py-3">
                     <Link href={`/vendor/orders/${order.id}`}>
-                      <button className="p-1.5 text-stone-400 hover:text-stone-700 dark:hover:text-white">
+                      <Button size="icon" variant="ghost" aria-label={`View order ${order.order_number}`}>
                         <Eye className="h-4 w-4" />
-                      </button>
+                      </Button>
                     </Link>
                   </td>
                 </tr>
@@ -294,7 +296,7 @@ export default function VendorOrdersPage() {
             )}
           </tbody>
         </table>
-      </div>
-    </motion.div>
+      </Card>
+    </PageTransition>
   );
 }

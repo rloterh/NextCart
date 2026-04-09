@@ -7,6 +7,9 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { AlertTriangle, Package, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { ProductStatusBadge, ToneBadge } from "@/components/ui/status-badge";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { ProductRowActions } from "@/components/vendor/product-row-actions";
 import { useAuth } from "@/hooks/use-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -43,13 +46,6 @@ const bulkStatuses: Array<{ label: string; value: ProductStatus }> = [
   { label: "Pause selected", value: "paused" },
   { label: "Archive selected", value: "archived" },
 ];
-
-const statusColors: Record<string, string> = {
-  active: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400",
-  draft: "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400",
-  paused: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400",
-  archived: "bg-stone-100 text-stone-400 dark:bg-stone-800 dark:text-stone-500",
-};
 
 async function ensureUniqueDuplicateSlug(storeId: string, baseName: string) {
   const supabase = getSupabaseBrowserClient();
@@ -193,17 +189,25 @@ export default function VendorProductsPage() {
   );
 
   if (authLoading) {
-    return <div className="h-96 animate-pulse bg-stone-100 dark:bg-stone-800" />;
+    return (
+      <div className="space-y-6">
+        <Card className="space-y-3">
+          <SkeletonBlock lines={2} className="max-w-md" />
+        </Card>
+        <Card className="space-y-3">
+          <SkeletonBlock lines={8} />
+        </Card>
+      </div>
+    );
   }
 
   if (!store) {
     return (
-      <div className="border border-dashed border-stone-200 bg-white p-10 text-center dark:border-stone-800 dark:bg-stone-900">
-        <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Store access unavailable</h1>
-        <p className="mt-3 text-sm text-stone-500">
-          A vendor store record is required before you can manage catalog listings.
-        </p>
-      </div>
+      <StatePanel
+        title="Store access unavailable"
+        description="A vendor store record is required before you can manage catalog listings."
+        tone="warning"
+      />
     );
   }
 
@@ -499,19 +503,19 @@ export default function VendorProductsPage() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <Card className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Products</h1>
-          <p className="mt-1 text-sm text-stone-500">
+          <CardTitle>Products</CardTitle>
+          <CardDescription>
             {filteredProducts.length} of {products.length} product{products.length !== 1 ? "s" : ""} in your store
-          </p>
+          </CardDescription>
         </div>
         <div className="flex items-center gap-3">
           <Link href="/vendor/products/new">
             <Button leftIcon={<Plus className="h-4 w-4" />}>Add product</Button>
           </Link>
         </div>
-      </div>
+      </Card>
 
       <div className="flex flex-wrap items-center gap-2">
         {productViews.map((view) => (
@@ -628,7 +632,7 @@ export default function VendorProductsPage() {
         </div>
       ) : null}
 
-      <div className="border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+      <Card className="overflow-hidden p-0">
         <table className="w-full">
           <thead>
             <tr className="border-b border-stone-100 dark:border-stone-800">
@@ -656,7 +660,7 @@ export default function VendorProductsPage() {
                 <tr key={index} className="border-b border-stone-50 dark:border-stone-800/50">
                   {Array.from({ length: 8 }).map((_, cellIndex) => (
                     <td key={cellIndex} className="px-4 py-3.5">
-                      <div className="h-4 animate-pulse bg-stone-100 dark:bg-stone-800" />
+                      <SkeletonBlock />
                     </td>
                   ))}
                 </tr>
@@ -664,11 +668,14 @@ export default function VendorProductsPage() {
             ) : filteredProducts.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-4 py-16 text-center">
-                  <Package className="mx-auto mb-3 h-8 w-8 text-stone-300" />
-                  <p className="font-serif text-lg text-stone-400">No products match this operational view</p>
-                  <Link href="/vendor/products/new">
-                    <Button size="sm" className="mt-3">Add your first product</Button>
-                  </Link>
+                  <StatePanel
+                    title="No products match this operational view"
+                    description="Try a different catalog view or add a new listing to give this workspace more to manage."
+                    icon={Package}
+                    actionLabel="Add your first product"
+                    onAction={() => router.push("/vendor/products/new")}
+                    className="border-none bg-transparent px-0 py-0 shadow-none"
+                  />
                 </td>
               </tr>
             ) : (
@@ -705,10 +712,7 @@ export default function VendorProductsPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusColors[product.status]}`}>
-                        <span className="h-1 w-1 rounded-full bg-current" />
-                        {product.status}
-                      </span>
+                      <ProductStatusBadge status={product.status} />
                     </td>
                     <td className="px-4 py-3 text-sm text-stone-500">{product.category?.name ?? "-"}</td>
                     <td className="px-4 py-3 text-right text-sm font-medium text-stone-900 dark:text-white">{formatPrice(Number(product.price))}</td>
@@ -753,7 +757,7 @@ export default function VendorProductsPage() {
                           ) : null}
                         </div>
                       ) : (
-                        <span className="text-sm text-stone-400">Not tracked</span>
+                        <ToneBadge tone="muted">Not tracked</ToneBadge>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right text-sm text-stone-500">{product.sale_count}</td>
@@ -771,7 +775,7 @@ export default function VendorProductsPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
 
       {products.length > 0 ? (
         <div className="rounded-none border border-dashed border-stone-200 p-4 text-sm text-stone-500 dark:border-stone-800">

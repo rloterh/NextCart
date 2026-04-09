@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
 import { AlertCircle, ArrowUpRight, CreditCard, RefreshCcw, ShieldCheck, Store, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PageIntro, PageTransition } from "@/components/ui/page-shell";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useAuth } from "@/hooks/use-auth";
 import { getPayoutAnomaly, getPayoutState } from "@/lib/orders/payout-state";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -317,7 +318,16 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
   }
 
   if (authLoading) {
-    return <div className="h-96 animate-pulse bg-stone-100 dark:bg-stone-800" />;
+    return (
+      <PageTransition>
+        <Card className="space-y-4">
+          <SkeletonBlock lines={4} />
+        </Card>
+        <Card className="space-y-4">
+          <SkeletonBlock lines={8} />
+        </Card>
+      </PageTransition>
+    );
   }
 
   async function handleStripeConnect() {
@@ -367,24 +377,23 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
 
   if (!store) {
     return (
-      <div className="border border-dashed border-stone-200 bg-white p-10 text-center dark:border-stone-800 dark:bg-stone-900">
-        <Store className="mx-auto h-8 w-8 text-stone-300 dark:text-stone-700" />
-        <h1 className="mt-4 font-serif text-2xl text-stone-900 dark:text-white">Store profile unavailable</h1>
-        <p className="mt-2 text-sm text-stone-500">
-          Finish loading the vendor workspace or create a store record before editing settings.
-        </p>
-      </div>
+      <StatePanel
+        title="Store profile unavailable"
+        description="Finish loading the vendor workspace or create a store record before editing settings."
+        tone="warning"
+        icon={Store}
+      />
     );
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-6xl space-y-6">
+    <PageTransition className="mx-auto max-w-6xl space-y-6">
       <div className="max-w-3xl">
-        <p className="text-xs font-medium uppercase tracking-[0.28em] text-amber-700 dark:text-amber-500">Vendor operations</p>
-        <h1 className="mt-3 font-serif text-3xl text-stone-900 dark:text-white">Store settings and payouts</h1>
-        <p className="mt-3 text-sm leading-relaxed text-stone-500">
-          Shape how your storefront feels, how customers contact you, and how Stripe Connect powers marketplace payouts.
-        </p>
+        <PageIntro
+          eyebrow="Vendor operations"
+          title="Store settings and payouts"
+          description="Shape how your storefront feels, how customers contact you, and how Stripe Connect powers marketplace payouts."
+        />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -753,6 +762,6 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
           </Card>
         </div>
       </div>
-    </motion.div>
+    </PageTransition>
   );
 }

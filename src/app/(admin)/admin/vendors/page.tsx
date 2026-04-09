@@ -5,6 +5,9 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Store, CheckCircle2, XCircle, Eye, Clock, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { ToneBadge, VendorStatusBadge } from "@/components/ui/status-badge";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useUIStore } from "@/stores/ui-store";
 import { isExceptionStatus, isReturnStatus } from "@/lib/orders/operations-metrics";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -29,13 +32,6 @@ const statusTabs: { label: string; value: VendorStatus | "all" }[] = [
   { label: "Rejected", value: "rejected" },
   { label: "Suspended", value: "suspended" },
 ];
-
-const statusColors: Record<string, string> = {
-  pending: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400",
-  approved: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400",
-  rejected: "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400",
-  suspended: "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400",
-};
 
 export default function AdminVendorsPage() {
   const addToast = useUIStore((state) => state.addToast);
@@ -128,12 +124,12 @@ export default function AdminVendorsPage() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <div>
-        <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Vendor management</h1>
-        <p className="mt-1 text-sm text-stone-500">
+      <Card className="space-y-1">
+        <CardTitle>Vendor management</CardTitle>
+        <CardDescription>
           Review applications, inspect storefront readiness, and manage vendor account access.
-        </p>
-      </div>
+        </CardDescription>
+      </Card>
 
       <div className="flex items-center gap-1">
         {statusTabs.map((tab) => (
@@ -180,7 +176,7 @@ export default function AdminVendorsPage() {
         />
       </div>
 
-      <div className="border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+      <Card className="overflow-hidden p-0">
         <table className="w-full">
           <thead>
             <tr className="border-b border-stone-100 dark:border-stone-800">
@@ -198,7 +194,7 @@ export default function AdminVendorsPage() {
                 <tr key={index} className="border-b border-stone-50 dark:border-stone-800/50">
                   {Array.from({ length: 6 }).map((_, cellIndex) => (
                     <td key={cellIndex} className="px-4 py-3.5">
-                      <div className="h-4 animate-pulse bg-stone-100 dark:bg-stone-800" />
+                      <SkeletonBlock />
                     </td>
                   ))}
                 </tr>
@@ -206,8 +202,12 @@ export default function AdminVendorsPage() {
             ) : visibleStores.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-16 text-center">
-                  <Store className="mx-auto mb-3 h-8 w-8 text-stone-300" />
-                  <p className="text-sm text-stone-400">No vendors found</p>
+                  <StatePanel
+                    title="No vendors found"
+                    description="Try a different status or risk view to bring eligible vendors back into focus."
+                    icon={Store}
+                    className="border-none bg-transparent px-0 py-0 shadow-none"
+                  />
                 </td>
               </tr>
             ) : (
@@ -232,9 +232,7 @@ export default function AdminVendorsPage() {
                     <p className="text-[10px] text-stone-400">{store.owner?.email}</p>
                   </td>
                   <td className="px-4 py-3.5">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusColors[store.status]}`}>
-                      {store.status}
-                    </span>
+                    <VendorStatusBadge status={store.status} />
                   </td>
                   <td className="px-4 py-3.5 text-xs text-stone-500">
                     {risk ? (
@@ -247,7 +245,7 @@ export default function AdminVendorsPage() {
                         <p>{risk.payoutAlerts} payout alerts</p>
                       </div>
                     ) : (
-                      <span className="text-stone-400">Clear</span>
+                      <ToneBadge tone="success">Clear</ToneBadge>
                     )}
                   </td>
                   <td className="px-4 py-3.5 text-xs text-stone-500">
@@ -280,7 +278,7 @@ export default function AdminVendorsPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
     </motion.div>
   );
 }

@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
 import { AlertTriangle, Clock3, Package, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PageIntro, PageTransition } from "@/components/ui/page-shell";
+import { PriorityBadge, ToneBadge } from "@/components/ui/status-badge";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { recordAdminAction } from "@/lib/admin/audit";
 import { getDisputeSlaState, getSlaToneClasses } from "@/lib/admin/governance";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -73,13 +75,6 @@ const payoutHoldOptions: Array<{ label: string; value: PayoutHoldStatus }> = [
 ];
 
 const editableStatuses: DisputeStatus[] = ["open", "investigating", "vendor_action_required", "refund_pending", "resolved", "dismissed"];
-
-const priorityClasses: Record<DisputePriority, string> = {
-  low: "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300",
-  medium: "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300",
-  high: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300",
-  critical: "bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300",
-};
 
 function isMissingDisputesTable(message: string | null | undefined) {
   if (!message) return false;
@@ -335,10 +330,12 @@ export default function AdminDisputesPage() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+    <PageTransition>
       <div className="max-w-3xl">
-        <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Disputes and refunds</h1>
-        <p className="mt-1 text-sm text-stone-500">Open and resolve marketplace cases with structured status tracking, refund context, and accountable admin notes.</p>
+        <PageIntro
+          title="Disputes and refunds"
+          description="Open and resolve marketplace cases with structured status tracking, refund context, and accountable admin notes."
+        />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -380,11 +377,25 @@ export default function AdminDisputesPage() {
                 <p className="mt-1 text-sm text-stone-500">{visibleCases.length} dispute case(s) match this status view.</p>
               </div>
               {loading ? (
-                <div className="space-y-3 p-5">{Array.from({ length: 5 }).map((_, index) => <div key={index} className="h-16 animate-pulse bg-stone-100 dark:bg-stone-800" />)}</div>
+                <div className="space-y-3 p-5">{Array.from({ length: 5 }).map((_, index) => <SkeletonBlock key={index} lines={3} />)}</div>
               ) : error ? (
-                <div className="p-5 text-sm text-red-600 dark:text-red-300">We could not load dispute cases right now. {error}</div>
+                <div className="p-5">
+                  <StatePanel
+                    tone="danger"
+                    title="We could not load dispute cases"
+                    description={error}
+                    actionLabel="Try again"
+                    onAction={() => void fetchDisputes()}
+                  />
+                </div>
               ) : visibleCases.length === 0 ? (
-                <div className="p-8 text-sm text-stone-500">No dispute cases match the current view.</div>
+                <div className="p-5">
+                  <StatePanel
+                    title="No dispute cases match this view"
+                    description="Try another status filter or open a new case if a buyer issue needs admin review."
+                    icon={Scale}
+                  />
+                </div>
               ) : (
                 <div className="divide-y divide-stone-100 dark:divide-stone-800">
                   {visibleCases.map((entry) => {
@@ -394,9 +405,11 @@ export default function AdminDisputesPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${priorityClasses[entry.priority]}`}>{entry.priority}</span>
+                            <PriorityBadge priority={entry.priority} />
                             <span className="text-[10px] font-medium uppercase tracking-widest text-stone-400">{entry.status.replaceAll("_", " ")}</span>
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${getSlaToneClasses(slaState.tone)}`}>{slaState.label}</span>
+                            <ToneBadge tone={slaState.tone === "danger" ? "danger" : slaState.tone === "warning" ? "warning" : slaState.tone === "default" ? "info" : "muted"} className={getSlaToneClasses(slaState.tone)}>
+                              {slaState.label}
+                            </ToneBadge>
                           </div>
                           <p className="mt-2 text-sm font-medium text-stone-900 dark:text-white">{entry.summary}</p>
                           <p className="mt-1 text-xs text-stone-500">{entry.order?.order_number ?? "Unknown order"} / {entry.store?.name ?? "Unknown store"}</p>
@@ -415,8 +428,8 @@ export default function AdminDisputesPage() {
               ) : (
                 <>
                   <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${priorityClasses[selectedCase.priority]}`}>{selectedCase.priority}</span>
+                <div className="flex flex-wrap items-center gap-2">
+                      <PriorityBadge priority={selectedCase.priority} />
                       <span className="text-[10px] font-medium uppercase tracking-widest text-stone-400">{selectedCase.issue_type.replaceAll("_", " ")}</span>
                     </div>
                     <h2 className="mt-3 font-serif text-xl text-stone-900 dark:text-white">{selectedCase.summary}</h2>
@@ -427,7 +440,7 @@ export default function AdminDisputesPage() {
                     <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Buyer</span><span className="font-medium text-stone-900 dark:text-white">{selectedCase.buyer?.full_name || selectedCase.buyer?.email || "Buyer unavailable"}</span></div>
                     <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Order total</span><span className="font-medium text-stone-900 dark:text-white">{selectedCase.order ? formatPrice(Number(selectedCase.order.total)) : "Unavailable"}</span></div>
                     <div className="flex items-center justify-between gap-3"><span className="text-stone-500">Requested resolution</span><span className="font-medium text-stone-900 dark:text-white">{selectedCase.requested_resolution || "Not specified"}</span></div>
-                    <div className="flex items-center justify-between gap-3"><span className="text-stone-500">SLA target</span><span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${getSlaToneClasses(getDisputeSlaState(selectedCase.created_at, selectedCase.priority, selectedCase.status).tone)}`}>{getDisputeSlaState(selectedCase.created_at, selectedCase.priority, selectedCase.status).label}</span></div>
+                    <div className="flex items-center justify-between gap-3"><span className="text-stone-500">SLA target</span><ToneBadge tone={getDisputeSlaState(selectedCase.created_at, selectedCase.priority, selectedCase.status).tone === "danger" ? "danger" : getDisputeSlaState(selectedCase.created_at, selectedCase.priority, selectedCase.status).tone === "warning" ? "warning" : getDisputeSlaState(selectedCase.created_at, selectedCase.priority, selectedCase.status).tone === "default" ? "info" : "muted"} className={getSlaToneClasses(getDisputeSlaState(selectedCase.created_at, selectedCase.priority, selectedCase.status).tone)}>{getDisputeSlaState(selectedCase.created_at, selectedCase.priority, selectedCase.status).label}</ToneBadge></div>
                   </div>
 
                   <div className="grid gap-4">
@@ -472,11 +485,21 @@ export default function AdminDisputesPage() {
       ) : (
         <Card className="space-y-5">
           {loading ? (
-            <div className="space-y-3">{Array.from({ length: 5 }).map((_, index) => <div key={index} className="h-12 animate-pulse bg-stone-100 dark:bg-stone-800" />)}</div>
+            <div className="space-y-3">{Array.from({ length: 5 }).map((_, index) => <SkeletonBlock key={index} lines={2} />)}</div>
           ) : error ? (
-            <div className="text-sm text-red-600 dark:text-red-300">We could not load order context for new dispute cases. {error}</div>
+            <StatePanel
+              tone="danger"
+              title="We could not load order context"
+              description={error}
+              actionLabel="Try again"
+              onAction={() => void fetchDisputes()}
+            />
           ) : eligibleOrders.length === 0 ? (
-            <div className="text-sm text-stone-500">All loaded orders already have an active case, so there is nothing new to open right now.</div>
+            <StatePanel
+              title="No eligible orders right now"
+              description="All loaded orders already have an active dispute case, so there is nothing new to open."
+              icon={Package}
+            />
           ) : (
             <>
               <div><h2 className="font-serif text-xl text-stone-900 dark:text-white">Open a new case</h2><p className="mt-1 text-sm text-stone-500">Use this when an order needs admin-led refund or dispute handling.</p></div>
@@ -497,6 +520,6 @@ export default function AdminDisputesPage() {
           )}
         </Card>
       )}
-    </motion.div>
+    </PageTransition>
   );
 }

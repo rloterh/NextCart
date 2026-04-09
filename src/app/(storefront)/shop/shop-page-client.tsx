@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { SlidersHorizontal, Sparkles, Star, X } from "lucide-react";
 import { SavedSearchesPanel } from "@/components/storefront/saved-searches-panel";
+import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { ProductCard } from "@/components/ui/product-card";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Category, Product } from "@/types";
 
@@ -73,27 +75,33 @@ export function ShopPageClient() {
     [pathname, router, searchParams]
   );
 
-  function updateParam(key: string, value: string) {
-    pushParams((params) => {
-      if (value) {
-        params.set(key, value);
-      } else {
-        params.delete(key);
-      }
-    });
-  }
+  const updateParam = useCallback(
+    (key: string, value: string) => {
+      pushParams((params) => {
+        if (value) {
+          params.set(key, value);
+        } else {
+          params.delete(key);
+        }
+      });
+    },
+    [pushParams]
+  );
 
-  function updatePriceRange(min: string, max: string) {
-    pushParams((params) => {
-      if (min) params.set("minPrice", min);
-      else params.delete("minPrice");
+  const updatePriceRange = useCallback(
+    (min: string, max: string) => {
+      pushParams((params) => {
+        if (min) params.set("minPrice", min);
+        else params.delete("minPrice");
 
-      if (max) params.set("maxPrice", max);
-      else params.delete("maxPrice");
-    });
-  }
+        if (max) params.set("maxPrice", max);
+        else params.delete("maxPrice");
+      });
+    },
+    [pushParams]
+  );
 
-  function clearAllFilters() {
+  const clearAllFilters = useCallback(() => {
     const params = new URLSearchParams();
     if (currentSort !== "newest") {
       params.set("sort", currentSort);
@@ -101,7 +109,7 @@ export function ShopPageClient() {
 
     const query = params.toString();
     router.push(query ? `${pathname}?${query}` : pathname);
-  }
+  }, [currentSort, pathname, router]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -213,7 +221,16 @@ export function ShopPageClient() {
   }, [fetchData]);
 
   const totalPages = Math.ceil(total / 12);
-  const activeFilters = [currentCategory, currentSearch, currentStore, currentMinPrice, currentMaxPrice, currentRating, featuredOnly ? "featured" : "", inStockOnly ? "in-stock" : ""]
+  const activeFilters = [
+    currentCategory,
+    currentSearch,
+    currentStore,
+    currentMinPrice,
+    currentMaxPrice,
+    currentRating,
+    featuredOnly ? "featured" : "",
+    inStockOnly ? "in-stock" : "",
+  ]
     .filter(Boolean)
     .length;
   const pageTitle = currentCategory
@@ -240,40 +257,38 @@ export function ShopPageClient() {
   );
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8">
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-serif text-3xl text-stone-900 dark:text-white">{pageTitle}</h1>
-          <p className="mt-1 text-sm text-stone-500">
-            {total} product{total !== 1 ? "s" : ""}
-            {activeFilters > 0 ? ` | ${activeFilters} active filter${activeFilters !== 1 ? "s" : ""}` : ""}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setFiltersOpen(!filtersOpen)}
-            className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-stone-600 hover:text-stone-900 lg:hidden"
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            Filters {activeFilters > 0 && `(${activeFilters})`}
-          </button>
-          <select
-            value={currentSort}
-            onChange={(event) => updateParam("sort", event.target.value)}
-            className="h-9 border-b border-stone-200 bg-transparent pr-8 text-xs font-medium uppercase tracking-wider text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-300"
-          >
-            {sortOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+    <PageTransition className="mx-auto max-w-7xl px-6 py-8">
+      <PageIntro
+        eyebrow="Marketplace discovery"
+        title={pageTitle}
+        description={`${total} product${total !== 1 ? "s" : ""}${activeFilters > 0 ? ` with ${activeFilters} active filter${activeFilters !== 1 ? "s" : ""}` : ""}.`}
+        actions={
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setFiltersOpen(!filtersOpen)}
+              className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-stone-600 hover:text-stone-900 lg:hidden"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Filters {activeFilters > 0 && `(${activeFilters})`}
+            </button>
+            <select
+              value={currentSort}
+              onChange={(event) => updateParam("sort", event.target.value)}
+              className="h-9 border-b border-stone-200 bg-transparent pr-8 text-xs font-medium uppercase tracking-wider text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-300"
+            >
+              {sortOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        }
+      />
 
       {filterSummary.length > 0 ? (
-        <div className="mb-6 flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {filterSummary.map((item) => (
             <span
               key={item}
@@ -488,43 +503,29 @@ export function ShopPageClient() {
 
         <div className="flex-1">
           {error ? (
-            <div className="border border-red-200 bg-red-50 px-6 py-10 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
-              <p className="font-medium">We could not load the shop right now.</p>
-              <p className="mt-2">{error}</p>
-              <button
-                type="button"
-                onClick={() => void fetchData()}
-                className="mt-5 inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
-              >
-                Retry
-              </button>
-            </div>
+            <StatePanel
+              title="We could not load the shop right now"
+              description={error}
+              tone="danger"
+              actionLabel="Retry"
+              onAction={() => void fetchData()}
+            />
           ) : loading ? (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 6 }).map((_, index) => (
-                <div key={index} className="space-y-3">
+                <div key={index} className="space-y-4 border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
                   <div className="aspect-[3/4] animate-pulse bg-stone-100 dark:bg-stone-800" />
-                  <div className="h-3 w-20 animate-pulse bg-stone-100 dark:bg-stone-800" />
-                  <div className="h-4 w-32 animate-pulse bg-stone-100 dark:bg-stone-800" />
+                  <SkeletonBlock lines={2} />
                 </div>
               ))}
             </div>
           ) : products.length === 0 ? (
-            <div className="border border-dashed border-stone-200 px-6 py-20 text-center dark:border-stone-700">
-              <p className="font-serif text-xl text-stone-900 dark:text-white">No products found</p>
-              <p className="mt-2 text-sm text-stone-500">
-                Try broadening your search or clearing the most restrictive merchandising filters.
-              </p>
-              {activeFilters > 0 ? (
-                <button
-                  type="button"
-                  onClick={clearAllFilters}
-                  className="mt-6 inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-amber-700 hover:text-amber-800 dark:text-amber-500"
-                >
-                  Reset filters
-                </button>
-              ) : null}
-            </div>
+            <StatePanel
+              title="No products found"
+              description="Try broadening your search or clearing the most restrictive merchandising filters."
+              actionLabel={activeFilters > 0 ? "Reset filters" : undefined}
+              onAction={activeFilters > 0 ? clearAllFilters : undefined}
+            />
           ) : (
             <>
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -555,6 +556,6 @@ export function ShopPageClient() {
           )}
         </div>
       </div>
-    </div>
+    </PageTransition>
   );
 }

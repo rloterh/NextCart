@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
 import { ChevronRight, Heart, ShoppingBag, Store, User } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Card, CardTitle } from "@/components/ui/card";
+import { PageIntro, PageTransition } from "@/components/ui/page-shell";
+import { SkeletonBlock } from "@/components/ui/state-panel";
 
 interface AccountStats {
   orders: number;
@@ -84,32 +85,33 @@ export default function AccountOverviewPage() {
   if (isLoading) {
     return (
       <div className="mx-auto max-w-6xl px-6 py-10">
-        <div className="h-28 animate-pulse bg-stone-100 dark:bg-stone-800" />
+        <Card className="space-y-4">
+          <SkeletonBlock lines={3} />
+        </Card>
         <div className="mt-8 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="grid gap-6 md:grid-cols-2">
             {Array.from({ length: 2 }).map((_, index) => (
-              <div key={index} className="h-64 animate-pulse bg-stone-100 dark:bg-stone-800" />
+              <Card key={index} className="space-y-4">
+                <SkeletonBlock lines={4} />
+              </Card>
             ))}
           </div>
-          <div className="h-72 animate-pulse bg-stone-100 dark:bg-stone-800" />
+          <Card className="space-y-4">
+            <SkeletonBlock lines={5} />
+          </Card>
         </div>
       </div>
     );
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-6xl px-6 py-10">
-      <div className="mb-10 flex flex-col gap-4 border-b border-stone-200 pb-8 dark:border-stone-800">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.28em] text-stone-400">Account</p>
-          <h1 className="mt-2 font-serif text-4xl text-stone-900 dark:text-white">
-            Welcome back{profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}
-          </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-stone-500 dark:text-stone-400">
-            Manage your orders, saved products, and marketplace activity from one clear workspace.
-          </p>
-        </div>
-      </div>
+    <PageTransition className="mx-auto max-w-6xl px-6 py-10">
+      <PageIntro
+        eyebrow="Account"
+        title={`Welcome back${profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}`}
+        description="Manage your orders, saved products, and marketplace activity from one clear workspace."
+        className="mb-4"
+      />
 
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="grid gap-6 md:grid-cols-2">
@@ -157,6 +159,6 @@ export default function AccountOverviewPage() {
           </div>
         </Card>
       </div>
-    </motion.div>
+    </PageTransition>
   );
 }
