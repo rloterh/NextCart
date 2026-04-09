@@ -3,6 +3,10 @@ import type { User } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Profile, Store } from "@/types";
 
+type AuthSubscription = { unsubscribe: () => void } | null;
+
+let authSubscription: AuthSubscription = null;
+
 interface AuthState {
   user: User | null;
   profile: Profile | null;
@@ -24,35 +28,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   initialize: async () => {
     const supabase = getSupabaseBrowserClient();
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
         set({ user: null, profile: null, store: null, isLoading: false, isInitialized: true });
-        return;
+      } else {
+        const { profile, store } = await loadProfileContext(user);
+        set({ user, profile, store, isLoading: false, isInitialized: true });
       }
 
-      const { data: profile } = await supabase
-        .from("profiles").select("*").eq("id", user.id).single();
-
-      // If vendor, fetch their store
-      let store: Store | null = null;
-      if (profile?.role === "vendor") {
-        const { data } = await supabase
-          .from("stores").select("*").eq("owner_id", user.id).single();
-        store = data as Store | null;
-      }
-
-      set({ user, profile, store, isLoading: false, isInitialized: true });
-
-      supabase.auth.onAuthStateChange(async (event, session) => {
+      authSubscription?.unsubscribe();
+      authSubscription = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === "SIGNED_OUT") {
-          set({ user: null, profile: null, store: null });
+          set({ user: null, profile: null, store: null, isLoading: false, isInitialized: true });
         } else if (event === "SIGNED_IN" && session?.user) {
-          set({ user: session.user });
-          await get().refreshProfile();
+          set({ user: session.user, isLoading: true });
+          const { profile, store } = await loadProfileContext(session.user);
+          set({ user: session.user, profile, store, isLoading: false, isInitialized: true });
         }
-      });
+      }).data.subscription;
     } catch {
-      set({ isLoading: false, isInitialized: true });
+      set({ user: null, profile: null, store: null, isLoading: false, isInitialized: true });
     }
   },
 
@@ -64,20 +61,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   refreshProfile: async () => {
-    const supabase = getSupabaseBrowserClient();
     const { user } = get();
     if (!user) return;
-
-    const { data: profile } = await supabase
-      .from("profiles").select("*").eq("id", user.id).single();
-
-    let store: Store | null = null;
-    if (profile?.role === "vendor") {
-      const { data } = await supabase
-        .from("stores").select("*").eq("owner_id", user.id).single();
-      store = data as Store | null;
-    }
-
+    const { profile, store } = await loadProfileContext(user);
     set({ profile, store });
   },
 }));
+
+async function loadProfileContext(user: User): Promise<Pick<AuthState, "profile" | "store">> {
+  const supabase = getSupabaseBrowserClient();
+  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+
+  let store: Store | null = null;
+  if (profile?.role === "vendor") {
+    const { data } = await supabase.from("stores").select("*").eq("owner_id", user.id).single();
+    store = data as Store | null;
+  }
+
+  return {
+    profile: (profile as Profile | null) ?? null,
+    store,
+  };
+}
