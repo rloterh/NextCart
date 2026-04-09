@@ -5,6 +5,11 @@
 export type UserRole = "buyer" | "vendor" | "admin";
 export type VendorStatus = "pending" | "approved" | "rejected" | "suspended";
 export type ProductStatus = "draft" | "active" | "paused" | "archived";
+export type DisputeStatus = "open" | "investigating" | "vendor_action_required" | "refund_pending" | "resolved" | "dismissed";
+export type DisputePriority = "low" | "medium" | "high" | "critical";
+export type DisputeIssueType = "refund_request" | "delivery_issue" | "product_issue" | "return_dispute" | "payout_hold";
+export type RefundDecision = "under_review" | "approved" | "denied" | "issued";
+export type PayoutHoldStatus = "clear" | "hold_requested" | "on_hold" | "released";
 export type OrderStatus =
   | "pending"
   | "confirmed"
@@ -33,6 +38,18 @@ export interface Profile {
   updated_at: string;
 }
 
+export interface AdminAction {
+  id: string;
+  admin_id: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  reason: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  admin?: Pick<Profile, "id" | "full_name" | "email"> | null;
+}
+
 // ============================================
 // STORE TYPES
 // ============================================
@@ -57,6 +74,34 @@ export interface Store {
   updated_at: string;
   // Joined
   owner?: Profile;
+}
+
+export interface DisputeCase {
+  id: string;
+  order_id: string;
+  store_id: string;
+  buyer_id: string;
+  status: DisputeStatus;
+  priority: DisputePriority;
+  issue_type: DisputeIssueType;
+  summary: string;
+  requested_resolution: string | null;
+  vendor_notes: string | null;
+  admin_notes: string | null;
+  resolution: string | null;
+  refund_amount: number | null;
+  refund_decision: RefundDecision;
+  refund_decided_at: string | null;
+  payout_hold_status: PayoutHoldStatus;
+  payout_hold_reason: string | null;
+  assigned_admin_id: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+  order?: unknown;
+  store?: Store;
+  buyer?: Profile;
+  assigned_admin?: Pick<Profile, "id" | "full_name" | "email"> | null;
 }
 
 // ============================================

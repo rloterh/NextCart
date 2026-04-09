@@ -275,7 +275,7 @@ export default function AdminOrdersPage() {
                       <div>
                         <p className="text-sm font-medium text-stone-900 dark:text-white">{order.order_number}</p>
                         <p className="mt-1 text-xs text-stone-500">
-                          {order.store?.name ?? "Unknown store"} · {order.buyer?.full_name ?? order.buyer?.email ?? "Unknown buyer"}
+                          {order.store?.name ?? "Unknown store"} | {order.buyer?.full_name ?? order.buyer?.email ?? "Unknown buyer"}
                         </p>
                         <div className="mt-2 flex flex-wrap gap-2">
                           {reasons.map((reason) => (
