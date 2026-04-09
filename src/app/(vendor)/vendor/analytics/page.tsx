@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { motion } from "framer-motion";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 import { AlertTriangle, DollarSign, Eye, Package, ShieldCheck, Timer, Undo2 } from "lucide-react";
 import { Card, CardTitle } from "@/components/ui/card";
+import { PageIntro, PageTransition } from "@/components/ui/page-shell";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useAuth } from "@/hooks/use-auth";
 import { getExceptionRate, getAverageFulfillmentDays, getMonthlyNetRevenueSeries, getReturnRate, getSettlementRate } from "@/lib/orders/operations-metrics";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -47,6 +48,7 @@ function isActiveProduct(status: ProductStatus) {
 export default function VendorAnalyticsPage() {
   const { store } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState({
     products: 0,
     active: 0,
@@ -65,17 +67,28 @@ export default function VendorAnalyticsPage() {
   const fetchData = useCallback(async () => {
     if (!store) {
       setLoading(false);
+      setError(null);
       return;
     }
 
+    setError(null);
     const supabase = getSupabaseBrowserClient();
-    const [{ data: products }, { data: orders }] = await Promise.all([
+    const [{ data: products, error: productsError }, { data: orders, error: ordersError }] = await Promise.all([
       supabase.from("products").select("id, name, price, status, view_count, sale_count").eq("store_id", store.id),
       supabase
         .from("orders")
         .select("status, total, platform_fee, created_at, delivered_at, stripe_transfer_status, stripe_transfer_id")
         .eq("store_id", store.id),
     ]);
+
+    const queryError = productsError ?? ordersError;
+    if (queryError) {
+      setError(queryError.message);
+      setTopProducts([]);
+      setChartData([]);
+      setLoading(false);
+      return;
+    }
 
     const allProducts = (products ?? []) as ProductAnalyticsRow[];
     const allOrders = (orders ?? []) as AnalyticsOrder[];
@@ -110,11 +123,42 @@ export default function VendorAnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <PageTransition>
+        <PageIntro title="Analytics" description="Track sales performance, fulfillment health, and settlement quality from one vendor view." />
         {Array.from({ length: 3 }).map((_, index) => (
-          <div key={index} className="h-32 animate-pulse bg-stone-100 dark:bg-stone-800" />
+          <Card key={index} className="space-y-3">
+            <SkeletonBlock lines={4} />
+          </Card>
         ))}
-      </div>
+      </PageTransition>
+    );
+  }
+
+  if (!store) {
+    return (
+      <PageTransition>
+        <PageIntro title="Analytics" description="Track sales performance, fulfillment health, and settlement quality from one vendor view." />
+        <StatePanel
+          title="Store access is unavailable"
+          description="Finish your store setup before using the analytics workspace."
+          tone="warning"
+        />
+      </PageTransition>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageTransition>
+        <PageIntro title="Analytics" description="Track sales performance, fulfillment health, and settlement quality from one vendor view." />
+        <StatePanel
+          title="We could not load vendor analytics"
+          description={error}
+          tone="danger"
+          actionLabel="Try again"
+          onAction={() => void fetchData()}
+        />
+      </PageTransition>
     );
   }
 
@@ -170,11 +214,8 @@ export default function VendorAnalyticsPage() {
   ];
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <div>
-        <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Analytics</h1>
-        <p className="mt-1 text-sm text-stone-500">Track sales performance, fulfillment health, and settlement quality from one vendor view.</p>
-      </div>
+    <PageTransition>
+      <PageIntro title="Analytics" description="Track sales performance, fulfillment health, and settlement quality from one vendor view." />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {healthCards.map((stat) => (
@@ -252,7 +293,12 @@ export default function VendorAnalyticsPage() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <p className="py-12 text-center text-sm text-stone-400">No sales data yet</p>
+              <StatePanel
+                title="No sales data yet"
+                description="As orders start converting, top-performing products will appear here automatically."
+                icon={Package}
+                className="border-none bg-transparent py-12 shadow-none"
+              />
             )}
           </div>
         </Card>
@@ -284,6 +330,6 @@ export default function VendorAnalyticsPage() {
           </div>
         </Card>
       </div>
-    </motion.div>
+    </PageTransition>
   );
 }

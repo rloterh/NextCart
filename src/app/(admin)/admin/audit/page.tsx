@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Clock3, ScrollText, ShieldAlert, Scale } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { StatePanel } from "@/components/ui/state-panel";
+import { PageIntro, PageTransition } from "@/components/ui/page-shell";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatDate } from "@/lib/utils/constants";
 import type { AdminAction, Profile } from "@/types";
@@ -24,8 +24,7 @@ export default function AdminAuditPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("all");
 
-  useEffect(() => {
-    async function fetchActions() {
+  const fetchActions = useCallback(async () => {
       setLoading(true);
       setError(null);
       const supabase = getSupabaseBrowserClient();
@@ -43,10 +42,11 @@ export default function AdminAuditPage() {
       }
 
       setLoading(false);
-    }
+    }, []);
 
+  useEffect(() => {
     void fetchActions();
-  }, []);
+  }, [fetchActions]);
 
   const entityTypes = useMemo(() => ["all", ...new Set(actions.map((action) => action.entity_type))], [actions]);
   const visibleActions = useMemo(() => actions.filter((action) => filter === "all" || action.entity_type === filter), [actions, filter]);
@@ -58,10 +58,12 @@ export default function AdminAuditPage() {
   ];
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+    <PageTransition>
       <div className="max-w-3xl">
-        <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Audit trail</h1>
-        <p className="mt-1 text-sm text-stone-500">Review the latest governance actions, who performed them, and what policy context was recorded.</p>
+        <PageIntro
+          title="Audit trail"
+          description="Review the latest governance actions, who performed them, and what policy context was recorded."
+        />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -102,7 +104,7 @@ export default function AdminAuditPage() {
         {loading ? (
           <div className="space-y-3 p-5">
             {Array.from({ length: 6 }).map((_, index) => (
-              <div key={index} className="h-16 animate-pulse bg-stone-100 dark:bg-stone-800" />
+              <SkeletonBlock key={index} lines={3} />
             ))}
           </div>
         ) : error ? (
@@ -112,7 +114,7 @@ export default function AdminAuditPage() {
               title="We could not load audit events"
               description={error}
               actionLabel="Try again"
-              onAction={() => window.location.reload()}
+              onAction={() => void fetchActions()}
             />
           </div>
         ) : visibleActions.length === 0 ? (
@@ -147,6 +149,6 @@ export default function AdminAuditPage() {
           </div>
         )}
       </Card>
-    </motion.div>
+    </PageTransition>
   );
 }

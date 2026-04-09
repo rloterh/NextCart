@@ -1,43 +1,54 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { Package, ShoppingCart, DollarSign, Eye } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { PageIntro, PageTransition } from "@/components/ui/page-shell";
+import { StatePanel } from "@/components/ui/state-panel";
 import { useAuth } from "@/hooks/use-auth";
 
-const stats = [
-  { label: "Products", value: "0", icon: Package, color: "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400" },
-  { label: "Orders", value: "0", icon: ShoppingCart, color: "bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400" },
-  { label: "Revenue", value: "$0", icon: DollarSign, color: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400" },
-  { label: "Views", value: "0", icon: Eye, color: "bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400" },
+const quickActions = [
+  { label: "Products", href: "/vendor/products", icon: Package, description: "Manage catalog listings, inventory, and bulk actions." },
+  { label: "Orders", href: "/vendor/orders", icon: ShoppingCart, description: "Handle fulfillment, exceptions, and buyer updates." },
+  { label: "Analytics", href: "/vendor/analytics", icon: Eye, description: "Track sales, exception-rate, and settlement health." },
+  { label: "Finance and settings", href: "/vendor/settings", icon: DollarSign, description: "Review payout readiness, policies, and trust content." },
 ];
 
 export default function VendorDashboard() {
+  const router = useRouter();
   const { store } = useAuth();
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <div>
-        <h1 className="font-serif text-2xl text-stone-900 dark:text-white">
-          Welcome, {store?.name ?? "Vendor"}
-        </h1>
-        <p className="mt-1 text-sm text-stone-500">Your store overview at a glance.</p>
-      </div>
+    <PageTransition>
+      <PageIntro
+        eyebrow="Vendor"
+        title={`Welcome${store?.name ? `, ${store.name}` : ""}`}
+        description="Use this workspace to move between catalog operations, fulfillment, analytics, and payout readiness without losing context."
+      />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <div key={stat.label} className="border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium uppercase tracking-widest text-stone-400">{stat.label}</p>
-              <div className={`p-2 ${stat.color}`}><stat.icon className="h-4 w-4" /></div>
-            </div>
-            <p className="mt-3 text-2xl font-medium text-stone-900 dark:text-white">{stat.value}</p>
-          </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {quickActions.map((action) => (
+          <Link key={action.href} href={action.href} className="group">
+            <Card className="h-full transition-colors hover:bg-stone-50 dark:hover:bg-stone-900/80">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">{action.label}</CardTitle>
+                <div className="rounded-full bg-stone-100 p-2 text-stone-700 dark:bg-stone-800 dark:text-stone-300">
+                  <action.icon className="h-4 w-4" />
+                </div>
+              </div>
+              <CardDescription className="mt-3">{action.description}</CardDescription>
+            </Card>
+          </Link>
         ))}
       </div>
 
-      <div className="border border-dashed border-stone-300 p-12 text-center text-sm text-stone-400 dark:border-stone-700">
-        Product management, order fulfillment, and analytics — coming in Phase 2
-      </div>
-    </motion.div>
+      <StatePanel
+        title="Workspace status"
+        description="Catalog operations, order fulfillment, analytics, and finance controls are all now active in this vendor workspace. Use the links above to jump straight into the area you need."
+        actionLabel="Open products"
+        onAction={() => router.push("/vendor/products")}
+      />
+    </PageTransition>
   );
 }

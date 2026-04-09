@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, DollarSign, Package, ShieldAlert } from "lucide-react";
-import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { Card, CardTitle } from "@/components/ui/card";
+import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { OrderStatusBadge, ToneBadge } from "@/components/ui/status-badge";
-import { StatePanel } from "@/components/ui/state-panel";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { getPayoutAnomaly, getPayoutState } from "@/lib/orders/payout-state";
 import { isExceptionStatus, isReturnStatus } from "@/lib/orders/operations-metrics";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -90,8 +90,7 @@ export default function AdminOrdersPage() {
   const [search, setSearch] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchOrders() {
+  const fetchOrders = useCallback(async () => {
       setLoading(true);
       setError(null);
 
@@ -111,10 +110,11 @@ export default function AdminOrdersPage() {
       }
 
       setLoading(false);
-    }
+    }, []);
 
+  useEffect(() => {
     void fetchOrders();
-  }, []);
+  }, [fetchOrders]);
 
   const flaggedOrders = useMemo(
     () => orders.filter((order) => getOrderRiskReasons(order).length > 0),
@@ -185,14 +185,13 @@ export default function AdminOrdersPage() {
   ];
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+    <PageTransition>
       <div className="max-w-3xl">
-        <Card className="border-stone-200/70 bg-stone-50/80 p-6 dark:border-stone-800 dark:bg-stone-900/60">
-          <CardTitle className="text-2xl">Order risk review</CardTitle>
-          <CardDescription>
-            Review unresolved delivery, return, and payout issues at the order level so admins can intervene with context.
-          </CardDescription>
-        </Card>
+        <PageIntro
+          title="Order risk review"
+          description="Review unresolved delivery, return, and payout issues at the order level so admins can intervene with context."
+          className="border-stone-200/70 bg-stone-50/80 dark:border-stone-800 dark:bg-stone-900/60"
+        />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -251,7 +250,7 @@ export default function AdminOrdersPage() {
           {loading ? (
             <div className="space-y-3 p-5">
               {Array.from({ length: 5 }).map((_, index) => (
-                <div key={index} className="h-16 animate-pulse rounded-sm bg-stone-100 dark:bg-stone-800" />
+                <SkeletonBlock key={index} lines={3} />
               ))}
             </div>
           ) : error ? (
@@ -261,7 +260,7 @@ export default function AdminOrdersPage() {
                 title="We could not load flagged orders"
                 description={error}
                 actionLabel="Try again"
-                onAction={() => window.location.reload()}
+                onAction={() => void fetchOrders()}
               />
             </div>
           ) : visibleOrders.length === 0 ? (
@@ -438,6 +437,6 @@ export default function AdminOrdersPage() {
           )}
         </Card>
       </div>
-    </motion.div>
+    </PageTransition>
   );
 }
