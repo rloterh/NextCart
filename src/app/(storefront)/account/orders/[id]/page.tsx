@@ -7,6 +7,8 @@ import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, Mail, MapPin, Truck } from "lucide-react";
 import { Card, CardTitle } from "@/components/ui/card";
+import { OrderStatusBadge } from "@/components/ui/status-badge";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useAuth } from "@/hooks/use-auth";
 import { renderOrderCommunicationTemplate } from "@/lib/orders/communication-templates";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -70,7 +72,9 @@ export default function BuyerOrderDetailPage() {
   if (authLoading || loading) {
     return (
       <div className="mx-auto max-w-3xl px-6 py-8">
-        <div className="h-96 animate-pulse bg-stone-100 dark:bg-stone-800" />
+        <Card className="space-y-4">
+          <SkeletonBlock lines={3} />
+        </Card>
       </div>
     );
   }
@@ -78,17 +82,18 @@ export default function BuyerOrderDetailPage() {
   if (error) {
     return (
       <div className="mx-auto max-w-3xl px-6 py-20">
-        <div className="border border-red-200 bg-red-50 px-4 py-5 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
-          We could not load this order right now. {error}
-        </div>
+        <StatePanel title="We could not load this order right now" description={error} tone="danger" />
       </div>
     );
   }
 
   if (!order) {
     return (
-      <div className="py-20 text-center">
-        <p className="font-serif text-xl text-stone-400">Order not found</p>
+      <div className="mx-auto max-w-3xl px-6 py-20">
+        <StatePanel
+          title="Order not found"
+          description="This order may no longer be available for your account, or the link may be out of date."
+        />
       </div>
     );
   }
@@ -159,6 +164,7 @@ export default function BuyerOrderDetailPage() {
 
       <Card>
         <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Order status</p>
+        <OrderStatusBadge status={order.status} className="mt-3" />
         <h2 className="mt-2 font-serif text-2xl text-stone-900 dark:text-white">{statusContent.label}</h2>
         <p className="mt-2 text-sm leading-relaxed text-stone-500">{statusContent.buyerMessage}</p>
       </Card>
@@ -321,7 +327,7 @@ export default function BuyerOrderDetailPage() {
           <p className="mt-3 text-sm leading-relaxed text-stone-500">
             {order.status === "delivery_failed" || order.status === "reshipping"
               ? "The vendor is actively reviewing the failed delivery and should share the replacement shipment details here once the retry is booked."
-              : "The return is moving through the vendor’s resolution flow. Keep checking this page for the next confirmed milestone."}
+              : "The return is moving through the vendor's resolution flow. Keep checking this page for the next confirmed milestone."}
           </p>
         </Card>
       ) : null}

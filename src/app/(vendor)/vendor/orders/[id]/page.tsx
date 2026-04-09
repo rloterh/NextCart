@@ -9,6 +9,8 @@ import { ArrowLeft, CheckCircle2, Copy, Mail, MapPin, Package, PencilLine, Truck
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { OrderStatusBadge } from "@/components/ui/status-badge";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useAuth } from "@/hooks/use-auth";
 import { renderOrderCommunicationTemplate } from "@/lib/orders/communication-templates";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -210,33 +212,38 @@ export default function VendorOrderDetailPage() {
   if (authLoading || loading) {
     return (
       <div className="mx-auto max-w-3xl space-y-6">
-        <div className="h-96 animate-pulse bg-stone-100 dark:bg-stone-800" />
+        <Card className="space-y-4">
+          <SkeletonBlock lines={3} />
+        </Card>
       </div>
     );
   }
 
   if (!store) {
     return (
-      <div className="rounded-none border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
-        Store access is unavailable for this account. Finish your store setup to manage order operations.
-      </div>
+      <StatePanel
+        title="Store access is unavailable"
+        description="Finish your store setup to manage order operations from the vendor workspace."
+        tone="warning"
+      />
     );
   }
 
   if (error) {
     return (
       <div className="mx-auto max-w-3xl py-20">
-        <div className="border border-red-200 bg-red-50 px-4 py-5 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
-          We could not load this order right now. {error}
-        </div>
+        <StatePanel title="We could not load this order right now" description={error} tone="danger" />
       </div>
     );
   }
 
   if (!order) {
     return (
-      <div className="py-20 text-center">
-        <p className="font-serif text-xl text-stone-400">Order not found</p>
+      <div className="mx-auto max-w-3xl py-20">
+        <StatePanel
+          title="Order not found"
+          description="This order may no longer exist for your store, or the link may be out of date."
+        />
       </div>
     );
   }
@@ -377,6 +384,7 @@ export default function VendorOrderDetailPage() {
 
       <Card>
         <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Buyer-facing status</p>
+        <OrderStatusBadge status={order.status} className="mt-3" />
         <h2 className="mt-2 font-serif text-2xl text-stone-900 dark:text-white">{statusContent.label}</h2>
         <p className="mt-2 text-sm leading-relaxed text-stone-500">{statusContent.vendorMessage}</p>
       </Card>
