@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import { Eye, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { OrderStatusBadge, ToneBadge } from "@/components/ui/status-badge";
 import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useAuth } from "@/hooks/use-auth";
@@ -165,16 +165,17 @@ export default function VendorOrdersPage() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <Card className="border-stone-200/70 bg-stone-50/80 p-6 dark:border-stone-800 dark:bg-stone-900/60">
-        <CardTitle className="text-2xl">Orders</CardTitle>
-        <CardDescription>
-          Run daily fulfillment, payout review, and exception handling from one operational queue.
-        </CardDescription>
-        <p className="mt-4 text-xs font-medium uppercase tracking-[0.18em] text-stone-400">
-          {visibleOrders.length} of {orders.length} order{orders.length !== 1 ? "s" : ""}
-        </p>
-      </Card>
+    <PageTransition>
+      <PageIntro
+        title="Orders"
+        description="Run daily fulfillment, payout review, and exception handling from one operational queue."
+        className="border-stone-200/70 bg-stone-50/80 dark:border-stone-800 dark:bg-stone-900/60"
+        actions={
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-400">
+            {visibleOrders.length} of {orders.length} order{orders.length !== 1 ? "s" : ""}
+          </p>
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         {savedViews.map((view) => (
@@ -246,7 +247,7 @@ export default function VendorOrdersPage() {
                     title="We could not load your orders"
                     description={error}
                     actionLabel="Try again"
-                    onAction={() => window.location.reload()}
+                    onAction={() => void fetchOrders()}
                   />
                 </td>
               </tr>
@@ -296,6 +297,6 @@ export default function VendorOrdersPage() {
           </tbody>
         </table>
       </Card>
-    </motion.div>
+    </PageTransition>
   );
 }

@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import { AlertTriangle, ClipboardList, EyeOff, Package, ShieldAlert, Sparkles, Star, Store, UserRoundCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { ProductStatusBadge, ToneBadge, VendorStatusBadge } from "@/components/ui/status-badge";
-import { StatePanel } from "@/components/ui/state-panel";
+import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { recordAdminAction } from "@/lib/admin/audit";
 import { getPayoutAnomaly } from "@/lib/orders/payout-state";
 import { isExceptionStatus, isReturnStatus } from "@/lib/orders/operations-metrics";
@@ -293,10 +293,12 @@ export default function AdminModerationPage() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+    <PageTransition>
       <div className="max-w-3xl">
-        <h1 className="font-serif text-2xl text-stone-900 dark:text-white">Moderation queue</h1>
-        <p className="mt-1 text-sm text-stone-500">Review catalog quality, vendor readiness, sensitive reviews, and flagged operational issues in one queue.</p>
+        <PageIntro
+          title="Moderation queue"
+          description="Review catalog quality, vendor readiness, sensitive reviews, and flagged operational issues in one queue."
+        />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -334,7 +336,7 @@ export default function AdminModerationPage() {
             <p className="mt-1 text-sm text-stone-500">{visibleItems.length} item(s) match the current moderation view.</p>
           </div>
           {loading ? (
-            <div className="space-y-3 p-5">{Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-16 animate-pulse bg-stone-100 dark:bg-stone-800" />)}</div>
+            <div className="space-y-3 p-5">{Array.from({ length: 6 }).map((_, index) => <SkeletonBlock key={index} lines={3} />)}</div>
           ) : error ? (
             <div className="p-5">
               <StatePanel
@@ -463,6 +465,6 @@ export default function AdminModerationPage() {
           )}
         </Card>
       </div>
-    </motion.div>
+    </PageTransition>
   );
 }

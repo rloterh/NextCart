@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ChevronRight, Mail, Package, Truck } from "lucide-react";
-import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { OrderStatusBadge } from "@/components/ui/status-badge";
 import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useAuth } from "@/hooks/use-auth";
@@ -26,8 +27,7 @@ export default function BuyerOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchOrders() {
+  const fetchOrders = useCallback(async () => {
       if (!user) {
         setOrders([]);
         setLoading(false);
@@ -52,28 +52,31 @@ export default function BuyerOrdersPage() {
       }
 
       setLoading(false);
-    }
+    }, [user]);
 
+  useEffect(() => {
     if (authLoading) {
       return;
     }
 
     void fetchOrders();
-  }, [authLoading, user]);
+  }, [authLoading, fetchOrders]);
 
   const isInitialLoading = authLoading || loading;
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-8">
-      <Card className="border-stone-200/70 bg-stone-50/80 p-6 dark:border-stone-800 dark:bg-stone-900/60">
-        <CardTitle className="text-3xl">My orders</CardTitle>
-        <CardDescription>
-          Track delivery progress, payment milestones, and post-purchase updates in one place.
-        </CardDescription>
-        <p className="mt-4 text-xs font-medium uppercase tracking-[0.18em] text-stone-400">
-          {orders.length} order{orders.length !== 1 ? "s" : ""}
-        </p>
-      </Card>
+    <PageTransition className="mx-auto max-w-3xl px-6 py-8">
+      <PageIntro
+        eyebrow="Account"
+        title="My orders"
+        description="Track delivery progress, payment milestones, and post-purchase updates in one place."
+        className="border-stone-200/70 bg-stone-50/80 dark:border-stone-800 dark:bg-stone-900/60"
+        actions={
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-400">
+            {orders.length} order{orders.length !== 1 ? "s" : ""}
+          </p>
+        }
+      />
 
       <div className="mt-8 space-y-4">
         {isInitialLoading ? (
@@ -94,7 +97,7 @@ export default function BuyerOrdersPage() {
             title="We could not load your orders"
             description={error}
             actionLabel="Try again"
-            onAction={() => window.location.reload()}
+            onAction={() => void fetchOrders()}
           />
         ) : orders.length === 0 ? (
           <StatePanel
@@ -162,6 +165,6 @@ export default function BuyerOrdersPage() {
           ))
         )}
       </div>
-    </div>
+    </PageTransition>
   );
 }
