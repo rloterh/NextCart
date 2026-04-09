@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { createPlatformBoundaryErrorResponse } from "@/lib/platform/boundaries";
+import { getRequestTrace, jsonWithTrace, logPlatformEvent } from "@/lib/platform/observability";
 import { createPlatformCapabilityErrorResponse } from "@/lib/platform/readiness.server";
 import { calculatePlatformFee, createCheckoutPaymentIntent } from "@/lib/stripe/server";
 import { getServerUser, getSupabaseServerClient } from "@/lib/supabase/server";
@@ -72,27 +73,52 @@ function isValidShippingAddress(value: unknown): value is CheckoutShippingAddres
 }
 
 export async function POST(request: Request) {
+  const trace = getRequestTrace(request);
   try {
     const user = await getServerUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return createPlatformBoundaryErrorResponse(trace, {
+        status: 401,
+        error: "Unauthorized",
+        boundaryClass: "permission",
+        operatorGuidance: "Sign in before starting checkout so payment intents can be linked to a buyer session.",
+        detail: "Checkout is available only to authenticated buyers.",
+      });
     }
 
     const body = (await request.json()) as Partial<CheckoutRequestBody>;
 
     if (!Array.isArray(body.items) || !isValidShippingAddress(body.shippingAddress)) {
-      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+      return createPlatformBoundaryErrorResponse(trace, {
+        status: 400,
+        error: "Invalid request",
+        boundaryClass: "dependency",
+        operatorGuidance: "Retry checkout with valid cart items and a complete shipping payload.",
+        detail: "The checkout request body did not satisfy the required item or shipping shape.",
+      });
     }
 
     const items = body.items.filter(isCheckoutItemInput);
     if (items.length !== body.items.length || items.length === 0) {
-      return NextResponse.json({ error: "Invalid checkout items" }, { status: 400 });
+      return createPlatformBoundaryErrorResponse(trace, {
+        status: 400,
+        error: "Invalid checkout items",
+        boundaryClass: "dependency",
+        operatorGuidance: "Ensure each checkout item has a valid store, product, price, and quantity before retrying.",
+        detail: "One or more checkout items were missing required identifiers or numeric values.",
+      });
     }
 
     const shippingAddress = sanitizeShippingAddress(body.shippingAddress);
     if (!shippingAddress.fullName || !shippingAddress.line1 || !shippingAddress.city || !shippingAddress.postalCode) {
-      return NextResponse.json({ error: "Incomplete shipping address" }, { status: 400 });
+      return createPlatformBoundaryErrorResponse(trace, {
+        status: 400,
+        error: "Incomplete shipping address",
+        boundaryClass: "dependency",
+        operatorGuidance: "Capture the buyer's full shipping details before creating payment intents.",
+        detail: "The shipping address was missing one or more required fields after sanitization.",
+      });
     }
 
     const supabase = await getSupabaseServerClient();
@@ -114,7 +140,13 @@ export async function POST(request: Request) {
         .single();
 
       if (!store?.stripe_account_id) {
-        return NextResponse.json({ error: "Store not set up for payments" }, { status: 400 });
+        return createPlatformBoundaryErrorResponse(trace, {
+          status: 400,
+          error: "Store not set up for payments",
+          boundaryClass: "config",
+          operatorGuidance: "Complete vendor Stripe onboarding before accepting checkout for this store.",
+          detail: `Store ${storeId} does not currently have a connected Stripe account.`,
+        });
       }
 
       const subtotal = storeItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -139,7 +171,13 @@ export async function POST(request: Request) {
         .single();
 
       if (orderError) {
-        return NextResponse.json({ error: orderError.message }, { status: 500 });
+        return createPlatformBoundaryErrorResponse(trace, {
+          status: 500,
+          error: orderError.message,
+          boundaryClass: "dependency",
+          operatorGuidance: "Treat this as a checkout persistence failure and verify order table health before retrying payment creation.",
+          detail: "The order record could not be inserted before payment intent creation.",
+        });
       }
 
       const { error: itemsError } = await supabase.from("order_items").insert(
@@ -157,7 +195,13 @@ export async function POST(request: Request) {
       );
 
       if (itemsError) {
-        return NextResponse.json({ error: itemsError.message }, { status: 500 });
+        return createPlatformBoundaryErrorResponse(trace, {
+          status: 500,
+          error: itemsError.message,
+          boundaryClass: "dependency",
+          operatorGuidance: "Resolve the order-item persistence error before retrying checkout so payment state does not drift from cart state.",
+          detail: "The checkout route created the order record but could not persist one or more order items.",
+        });
       }
 
       const { clientSecret, paymentIntentId } = await createCheckoutPaymentIntent({
@@ -178,9 +222,23 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({ orders: results });
+    logPlatformEvent({
+      level: "info",
+      message: "Checkout payment intents created",
+      trace,
+      detail: { orderCount: results.length },
+    });
+
+    return jsonWithTrace(trace, { orders: results });
   } catch (error) {
-    console.error("Checkout error:", error);
-    return createPlatformCapabilityErrorResponse(error, "Checkout failed");
+    logPlatformEvent({
+      level: "error",
+      message: "Checkout failed",
+      trace,
+      detail: error instanceof Error ? error.message : error,
+    });
+    const response = createPlatformCapabilityErrorResponse(error, "Checkout failed");
+    response.headers.set("x-request-id", trace.requestId);
+    return response;
   }
 }

@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { headers } from "next/headers";
-import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { createPlatformBoundaryErrorResponse } from "@/lib/platform/boundaries";
+import { getRequestTrace, jsonWithTrace, logPlatformEvent } from "@/lib/platform/observability";
 import { getPublicSupabaseConfig } from "@/lib/platform/readiness.public";
 import { createPlatformCapabilityErrorResponse, requirePlatformCapability } from "@/lib/platform/readiness.server";
 import { getStripeServerClient } from "@/lib/stripe/server";
@@ -21,6 +22,7 @@ function getOrderIdFromTransferGroup(value: string | null | undefined) {
 }
 
 export async function POST(request: Request) {
+  const trace = getRequestTrace(request);
   const body = await request.text();
   const headersList = await headers();
   const signature = headersList.get("stripe-signature");
@@ -29,7 +31,13 @@ export async function POST(request: Request) {
     requirePlatformCapability("stripe_webhooks");
 
     if (!signature) {
-      return NextResponse.json({ error: "Missing stripe-signature header" }, { status: 400 });
+      return createPlatformBoundaryErrorResponse(trace, {
+        status: 400,
+        error: "Missing stripe-signature header",
+        boundaryClass: "dependency",
+        operatorGuidance: "Send the raw Stripe webhook payload with a valid stripe-signature header.",
+        detail: "The webhook request arrived without a signature header.",
+      });
     }
 
     let event: Stripe.Event;
@@ -37,7 +45,13 @@ export async function POST(request: Request) {
       const stripe = getStripeServerClient();
       event = stripe.webhooks.constructEvent(body, signature, process.env.STRIPE_WEBHOOK_SECRET!);
     } catch {
-      return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+      return createPlatformBoundaryErrorResponse(trace, {
+        status: 400,
+        error: "Invalid signature",
+        boundaryClass: "permission",
+        operatorGuidance: "Verify the webhook secret and ensure the raw request body reaches this route unchanged.",
+        detail: "Stripe signature validation failed for this webhook request.",
+      });
     }
 
     try {
@@ -118,12 +132,26 @@ export async function POST(request: Request) {
         }
       }
     } catch (error) {
-      console.error(`Webhook error (${event.type}):`, error);
-      return createPlatformCapabilityErrorResponse(error, "Webhook handler failed");
+      logPlatformEvent({
+        level: "error",
+        message: `Webhook handler failed for ${event.type}`,
+        trace,
+        detail: error instanceof Error ? error.message : error,
+      });
+      const response = createPlatformCapabilityErrorResponse(error, "Webhook handler failed");
+      response.headers.set("x-request-id", trace.requestId);
+      return response;
     }
 
-    return NextResponse.json({ received: true });
+    logPlatformEvent({
+      level: "info",
+      message: `Processed Stripe webhook ${event.type}`,
+      trace,
+    });
+    return jsonWithTrace(trace, { received: true });
   } catch (error) {
-    return createPlatformCapabilityErrorResponse(error, "Webhook configuration is not ready");
+    const response = createPlatformCapabilityErrorResponse(error, "Webhook configuration is not ready");
+    response.headers.set("x-request-id", trace.requestId);
+    return response;
   }
 }
