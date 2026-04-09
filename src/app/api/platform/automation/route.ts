@@ -1,10 +1,10 @@
-import { NextResponse } from "next/server";
 import {
   buildPlatformAutomationPayload,
   isAutomationSecretValid,
   runPlatformAutomationJob,
 } from "@/lib/platform/automation";
 import { sendDigestForProfile } from "@/lib/platform/digest-service";
+import { getRequestTrace, jsonWithTrace, logPlatformEvent } from "@/lib/platform/observability";
 import { createPlatformCapabilityErrorResponse, getServerPlatformChecks } from "@/lib/platform/readiness.server";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
@@ -77,9 +77,10 @@ function getEmailDeliveryAvailable() {
 }
 
 export async function GET(request: Request) {
+  const trace = getRequestTrace(request);
   const context = await resolveOperatorContext(request);
   if (!context) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return jsonWithTrace(trace, { error: "Unauthorized" }, { status: 401 });
   }
 
   try {
@@ -106,7 +107,7 @@ export async function GET(request: Request) {
             })
           : null;
 
-      return NextResponse.json({
+      return jsonWithTrace(trace, {
         ...payload,
         deliveredRecipientCount: delivery?.recipientCount ?? 0,
       });
@@ -119,21 +120,30 @@ export async function GET(request: Request) {
       emailDeliveryAvailable: getEmailDeliveryAvailable(),
     });
 
-    return NextResponse.json(payload);
+    return jsonWithTrace(trace, payload);
   } catch (error) {
-    return createPlatformCapabilityErrorResponse(error, "Unable to build automation overview");
+    logPlatformEvent({
+      level: "error",
+      message: "Platform automation GET failed",
+      trace,
+      detail: error instanceof Error ? error.message : error,
+    });
+    const response = createPlatformCapabilityErrorResponse(error, "Unable to build automation overview");
+    response.headers.set("x-request-id", trace.requestId);
+    return response;
   }
 }
 
 export async function POST(request: Request) {
+  const trace = getRequestTrace(request);
   const context = await resolveOperatorContext(request);
   if (!context) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return jsonWithTrace(trace, { error: "Unauthorized" }, { status: 401 });
   }
 
   const body = (await request.json().catch(() => null)) as { jobKey?: PlatformAutomationJobKey } | null;
   if (!body?.jobKey) {
-    return NextResponse.json({ error: "jobKey is required" }, { status: 400 });
+    return jsonWithTrace(trace, { error: "jobKey is required" }, { status: 400 });
   }
 
   try {
@@ -145,8 +155,16 @@ export async function POST(request: Request) {
       emailDeliveryAvailable: getEmailDeliveryAvailable(),
     });
 
-    return NextResponse.json(payload);
+    return jsonWithTrace(trace, payload);
   } catch (error) {
-    return createPlatformCapabilityErrorResponse(error, "Unable to run automation preview");
+    logPlatformEvent({
+      level: "error",
+      message: "Platform automation POST failed",
+      trace,
+      detail: error instanceof Error ? error.message : error,
+    });
+    const response = createPlatformCapabilityErrorResponse(error, "Unable to run automation preview");
+    response.headers.set("x-request-id", trace.requestId);
+    return response;
   }
 }

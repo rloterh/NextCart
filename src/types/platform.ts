@@ -53,6 +53,34 @@ export interface PlatformReadinessPayload {
   events: PlatformEventDefinition[];
 }
 
+export type PlatformSystemStatus = "healthy" | "attention" | "critical";
+
+export interface PlatformSystemAction {
+  id: string;
+  label: string;
+  description: string;
+  href: string;
+}
+
+export interface PlatformSystemSignal {
+  id: string;
+  label: string;
+  value: string;
+  description: string;
+  tone: PlatformNotificationTone;
+}
+
+export interface PlatformSystemPayload {
+  requestId: string;
+  generatedAt: string;
+  status: PlatformSystemStatus;
+  summary: PlatformReadinessSummary;
+  readinessChecks: PlatformCapabilityCheck[];
+  automationSummary: PlatformAutomationPayload | null;
+  signals: PlatformSystemSignal[];
+  actions: PlatformSystemAction[];
+}
+
 export type PlatformNotificationTone = "info" | "success" | "warning" | "danger" | "muted";
 export type PlatformNotificationState = "unread" | "read" | "archived";
 

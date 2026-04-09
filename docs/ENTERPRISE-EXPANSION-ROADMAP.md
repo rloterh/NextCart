@@ -319,6 +319,45 @@ Make NexCart feel operationally launch-ready by tightening runtime safety, surfa
 
 - `feature/launch-readiness-automation`
 
+## Phase 7: Security, Observability, And Incident Readiness
+
+### Objective
+
+Make NexCart easier to operate safely in production by adding clearer diagnostics, request tracing, system-health visibility, and incident-ready operational surfaces.
+
+### Major Features
+
+- request tracing and response correlation across critical operational routes
+- admin-visible system diagnostics and production health summaries
+- stronger operational error envelopes for support and incident review
+- deploy-ready runbook patterns for diagnostics and escalation
+- security-minded visibility into capability blocks without exposing secrets
+
+### Sprint Breakdown
+
+#### Sprint 7A: Diagnostics And Tracing Foundation
+
+- shared request trace helpers for critical platform APIs
+- admin system diagnostics page
+- unified system-health payload for readiness and automation posture
+- clearer support-facing request correlation for degraded flows
+
+#### Sprint 7B: Incident And Support Operations
+
+- incident-ready support handoff surfaces
+- richer failure categorization and operator guidance
+- workflow links from diagnostics into the right admin queues
+
+#### Sprint 7C: Security And Compliance Visibility
+
+- privileged workflow visibility and review checkpoints
+- safer operational guardrails around sensitive admin actions
+- policy/readiness visibility for production operations
+
+### Suggested Branch
+
+- `feature/security-observability-readiness`
+
 ## Notes On Unfinished Existing Signals
 
 These should be treated as intentional completion targets unless product direction changes:

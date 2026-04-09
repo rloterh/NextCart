@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { exportPlatformData, isAutomationSecretValid } from "@/lib/platform/automation";
+import { getRequestTrace, jsonWithTrace, logPlatformEvent } from "@/lib/platform/observability";
 import { createPlatformCapabilityErrorResponse } from "@/lib/platform/readiness.server";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
@@ -44,9 +45,10 @@ async function resolveOperatorContext(request: Request) {
 }
 
 export async function GET(request: Request) {
+  const trace = getRequestTrace(request);
   const context = await resolveOperatorContext(request);
   if (!context) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return jsonWithTrace(trace, { error: "Unauthorized" }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -61,11 +63,11 @@ export async function GET(request: Request) {
   const agedOnly = searchParams.get("agedOnly") === "true";
 
   if (!kind) {
-    return NextResponse.json({ error: "kind is required" }, { status: 400 });
+    return jsonWithTrace(trace, { error: "kind is required" }, { status: 400 });
   }
 
   if (format !== "csv" && format !== "json") {
-    return NextResponse.json({ error: "Unsupported format" }, { status: 400 });
+    return jsonWithTrace(trace, { error: "Unsupported format" }, { status: 400 });
   }
 
   try {
@@ -90,9 +92,18 @@ export async function GET(request: Request) {
       headers: {
         "Content-Type": exportFile.contentType,
         "Content-Disposition": `attachment; filename="${exportFile.filename}"`,
+        "x-request-id": trace.requestId,
       },
     });
   } catch (error) {
-    return createPlatformCapabilityErrorResponse(error, "Unable to create export handoff");
+    logPlatformEvent({
+      level: "error",
+      message: "Platform export generation failed",
+      trace,
+      detail: error instanceof Error ? error.message : error,
+    });
+    const response = createPlatformCapabilityErrorResponse(error, "Unable to create export handoff");
+    response.headers.set("x-request-id", trace.requestId);
+    return response;
   }
 }
