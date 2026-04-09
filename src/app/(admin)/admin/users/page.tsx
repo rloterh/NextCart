@@ -13,12 +13,16 @@ import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { ToneBadge } from "@/components/ui/status-badge";
 import { getSensitiveWorkflowReview } from "@/lib/platform/access-review";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { loadQueuePreference, loadQueueTextPreference, saveQueuePreference } from "@/lib/ui/queue-preferences";
 import { formatDate } from "@/lib/utils/constants";
 import { useUIStore } from "@/stores/ui-store";
 import type { Profile, UserRole } from "@/types";
 
 const roleIcons: Record<UserRole, typeof Users> = { buyer: ShoppingBag, vendor: Store, admin: Shield };
 const roleTones: Record<UserRole, "info" | "warning" | "danger"> = { buyer: "info", vendor: "warning", admin: "danger" };
+const adminUsersRoleFilterKey = "nexcart.admin.users.role";
+const adminUsersSearchKey = "nexcart.admin.users.search";
+const adminUserRoleValues: ReadonlyArray<UserRole | "all"> = ["all", "buyer", "vendor", "admin"];
 
 type AccessChangeResponse = {
   error?: string;
@@ -38,6 +42,19 @@ export default function AdminUsersPage() {
   const [changeReason, setChangeReason] = useState("");
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRoleFilter(loadQueuePreference(adminUsersRoleFilterKey, adminUserRoleValues, "all"));
+    setSearch(loadQueueTextPreference(adminUsersSearchKey));
+  }, []);
+
+  useEffect(() => {
+    saveQueuePreference(adminUsersRoleFilterKey, roleFilter);
+  }, [roleFilter]);
+
+  useEffect(() => {
+    saveQueuePreference(adminUsersSearchKey, search);
+  }, [search]);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -202,7 +219,7 @@ export default function AdminUsersPage() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-1">
-          {(["all", "buyer", "vendor", "admin"] as const).map((role) => (
+          {adminUserRoleValues.map((role) => (
             <button
               key={role}
               type="button"

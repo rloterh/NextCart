@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Boxes, ImagePlus, Package, Plus, Upload, X } from "lucide-react";
+import { PermissionBoundarySummary } from "@/components/platform/permission-boundary-summary";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -578,6 +579,19 @@ export function ProductEditorForm({ mode, product }: ProductEditorFormProps) {
                 <p className="mt-2 font-serif text-xl text-stone-900 capitalize dark:text-white">{form.status}</p>
                 <p className="mt-2 text-sm text-stone-500">Draft for preparation, active for storefront visibility, paused for temporary hold, archived for retirement.</p>
               </div>
+
+              <PermissionBoundarySummary
+                title="Catalog publishing boundary"
+                status={form.status === "active" || form.status === "archived" ? "attention" : "healthy"}
+                capability="vendor_catalog_publish"
+                href="/vendor/settings"
+                summary="Publishing changes here affect live storefront visibility, inventory trust, pricing accuracy, and the recovery burden on vendor operations when a listing goes live too early."
+                operatorGuidance={
+                  form.status === "active" || form.status === "archived"
+                    ? "Pause if pricing, variants, imagery, or stock coverage still need review. Use vendor settings and fulfillment surfaces to confirm the storefront can support this listing once it becomes customer-facing."
+                    : "Draft and paused states are safer for in-progress merchandising, but they should still reflect clean pricing, inventory intent, and variant clarity before activation."
+                }
+              />
 
               <div>
                 <label className="block text-xs font-medium uppercase tracking-widest text-stone-500 dark:text-stone-400">Save as</label>

@@ -569,20 +569,42 @@ export default function AdminModerationPage() {
                 <textarea id="policy-reason" value={policyReason} onChange={(event) => setPolicyReason(event.target.value)} rows={4} placeholder="Add the policy or context behind this action." className="mt-2 w-full border border-stone-200 bg-transparent px-3 py-2 text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200" />
               </div>
 
-              {selectedItem.entityType === "vendor" || selectedItem.entityType === "review" ? (
+              {selectedItem.entityType === "product" || selectedItem.entityType === "vendor" || selectedItem.entityType === "review" ? (
                 <PermissionBoundarySummary
-                  title={selectedItem.entityType === "vendor" ? "Vendor governance boundary" : "Review moderation boundary"}
-                  status="attention"
-                  capability={selectedItem.entityType === "vendor" ? "vendor_governance" : "review_moderation"}
+                  title={
+                    selectedItem.entityType === "vendor"
+                      ? "Vendor governance boundary"
+                      : selectedItem.entityType === "review"
+                        ? "Review moderation boundary"
+                        : "Catalog moderation boundary"
+                  }
+                  status={
+                    selectedItem.entityType === "product"
+                      ? selectedItem.product.status === "paused"
+                        ? "healthy"
+                        : "attention"
+                      : "attention"
+                  }
+                  capability={
+                    selectedItem.entityType === "vendor"
+                      ? "vendor_governance"
+                      : selectedItem.entityType === "review"
+                        ? "review_moderation"
+                        : "governance_moderation"
+                  }
                   summary={
                     selectedItem.entityType === "vendor"
                       ? "Vendor approval, suspension, and reinstatement affect storefront trust, access expectations, and may require parallel review of disputes or payout posture."
-                      : "Review visibility changes affect buyer trust surfaces and should be tied to a clear policy rationale rather than sentiment alone."
+                      : selectedItem.entityType === "review"
+                        ? "Review visibility changes affect buyer trust surfaces and should be tied to a clear policy rationale rather than sentiment alone."
+                        : "Product moderation changes affect storefront discoverability, merchandising trust, and whether buyers are exposed to catalog signals that may already be under review."
                   }
                   operatorGuidance={
                     selectedItem.entityType === "vendor"
                       ? "Escalate when the storefront has open disputes, payout risk, or mixed moderation signals that make the governance decision less obvious."
-                      : "Escalate when the review suggests fraud, coordinated abuse, or a broader trust issue that should widen beyond this single moderation action."
+                      : selectedItem.entityType === "review"
+                        ? "Escalate when the review suggests fraud, coordinated abuse, or a broader trust issue that should widen beyond this single moderation action."
+                        : "Escalate when product issues point to wider vendor-quality, inventory-credibility, or safety concerns instead of a one-off catalog adjustment."
                   }
                 />
               ) : null}

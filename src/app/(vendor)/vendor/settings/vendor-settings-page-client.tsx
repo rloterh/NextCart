@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, ArrowUpRight, CreditCard, ShieldCheck, Store, Wallet } from "lucide-react";
+import { PermissionBoundarySummary } from "@/components/platform/permission-boundary-summary";
 import { EventScaffoldPanel } from "@/components/platform/event-scaffold-panel";
 import { LaunchReadinessPanel } from "@/components/platform/launch-readiness-panel";
 import { DelayDigestPanel } from "@/components/platform/delay-digest-panel";
@@ -626,6 +627,21 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
                   Open Stripe dashboard
                 </Button>
               )}
+            </div>
+
+            <div className="mt-6">
+              <PermissionBoundarySummary
+                title="Vendor payout and storefront boundary"
+                status={store.status === "approved" && store.stripe_account_id ? "healthy" : "attention"}
+                capability="vendor_store_settings"
+                href="/vendor/orders"
+                summary="Store settings, support contacts, and payout setup all shape buyer trust, escalation handling, and whether orders can move through settlement cleanly once the storefront is live."
+                operatorGuidance={
+                  store.status === "approved" && store.stripe_account_id
+                    ? "Keep support email, returns guidance, and Stripe onboarding aligned so fulfillment and payout incidents can be handled without confusing buyers."
+                    : "Pause before launch if storefront policy details or Stripe setup are incomplete. Missing support or payout readiness usually becomes an operations issue, not just a settings issue."
+                }
+              />
             </div>
           </Card>
 

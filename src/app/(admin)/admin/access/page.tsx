@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, KeyRound, ShieldCheck, ShieldPlus, Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { PageIntro, PageTransition } from "@/components/ui/page-shell";
@@ -9,6 +9,7 @@ import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { StatusBadge, ToneBadge } from "@/components/ui/status-badge";
 import { usePlatformAccess } from "@/hooks/use-platform-access";
 import { filterPlatformAccessActions } from "@/lib/platform/access";
+import { loadQueuePreference, saveQueuePreference } from "@/lib/ui/queue-preferences";
 import { formatDate } from "@/lib/utils/constants";
 
 const accessReviewPresets = [
@@ -23,6 +24,8 @@ const accessReviewPresets = [
 ];
 
 type AccessReviewFilter = (typeof accessReviewPresets)[number]["value"];
+const accessReviewPresetKey = "nexcart.admin.access.reviewPreset";
+const accessReviewPresetValues: ReadonlyArray<AccessReviewFilter> = accessReviewPresets.map((entry) => entry.value);
 
 function getGuardrailTone(status: "healthy" | "attention" | "blocked") {
   switch (status) {
@@ -50,6 +53,14 @@ export default function AdminAccessPage() {
   const { data, loading, error, refetch } = usePlatformAccess();
   const [reviewFilter, setReviewFilter] = useState<AccessReviewFilter>("all");
   const activePreset = accessReviewPresets.find((entry) => entry.value === reviewFilter) ?? accessReviewPresets[0];
+
+  useEffect(() => {
+    setReviewFilter(loadQueuePreference(accessReviewPresetKey, accessReviewPresetValues, "all"));
+  }, []);
+
+  useEffect(() => {
+    saveQueuePreference(accessReviewPresetKey, reviewFilter);
+  }, [reviewFilter]);
 
   const visibleActions = useMemo(() => {
     if (!data) return [];
