@@ -6,6 +6,7 @@ import { EventScaffoldPanel } from "@/components/platform/event-scaffold-panel";
 import { LaunchReadinessPanel } from "@/components/platform/launch-readiness-panel";
 import { DelayDigestPanel } from "@/components/platform/delay-digest-panel";
 import { PlatformInboxPanel } from "@/components/platform/platform-inbox-panel";
+import { AutomationOpsPanel } from "@/components/platform/automation-ops-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -861,6 +862,11 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
           <DelayDigestPanel
             title="Operations delay digest"
             description="A concise operational summary for settlement lag, dispute pressure, and unread follow-up that can be emailed to your account inbox."
+          />
+
+          <AutomationOpsPanel
+            title="Scheduled operations automation"
+            description="Preview delay-digest and payout follow-up jobs, then hand finance clean settlement exports when the store needs operational backup."
           />
 
           <EventScaffoldPanel

@@ -7,6 +7,7 @@ import { EventScaffoldPanel } from "@/components/platform/event-scaffold-panel";
 import { LaunchReadinessPanel } from "@/components/platform/launch-readiness-panel";
 import { DelayDigestPanel } from "@/components/platform/delay-digest-panel";
 import { PlatformInboxPanel } from "@/components/platform/platform-inbox-panel";
+import { AutomationOpsPanel } from "@/components/platform/automation-ops-panel";
 import { Card } from "@/components/ui/card";
 import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
@@ -370,6 +371,11 @@ export default function AdminDashboard() {
         <DelayDigestPanel
           title="Marketplace governance digest"
           description="A role-aware delay summary for disputes, moderation pressure, and payout lag, ready to email when delivery is configured."
+        />
+
+        <AutomationOpsPanel
+          title="Scheduled governance automation"
+          description="Preview recurring dispute, moderation, and payout follow-up jobs, then hand finance or governance clean export snapshots."
         />
 
         <LaunchReadinessPanel
