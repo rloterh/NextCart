@@ -1,4 +1,5 @@
 import { buildPlatformAutomationPayload } from "@/lib/platform/automation";
+import { derivePlatformIncidents } from "@/lib/platform/incidents";
 import { getRequestTrace, jsonWithTrace, logPlatformEvent } from "@/lib/platform/observability";
 import { getPlatformReadinessPayload } from "@/lib/platform/readiness.server";
 import { getSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
@@ -126,6 +127,11 @@ export async function GET(request: Request) {
           href: "/admin/dashboard",
         },
       ],
+      incidents: derivePlatformIncidents({
+        readiness,
+        automationSummary,
+        requestId: trace.requestId,
+      }),
     };
 
     logPlatformEvent({

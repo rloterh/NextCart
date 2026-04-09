@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Activity, AlertTriangle, ArrowUpRight, ShieldCheck, Siren, Wrench } from "lucide-react";
+import { IncidentHandoffPanel } from "@/components/platform/incident-handoff-panel";
 import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { Card } from "@/components/ui/card";
 import { ToneBadge } from "@/components/ui/status-badge";
@@ -87,51 +88,55 @@ export default function AdminSystemPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_380px]">
-        <Card className="space-y-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Health summary</p>
-              <h2 className="mt-2 font-serif text-2xl text-stone-900 dark:text-white">Production posture</h2>
-              <p className="mt-2 text-sm text-stone-500">This combines capability readiness with automation-backed operational pressure.</p>
+        <div className="space-y-6">
+          <Card className="space-y-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Health summary</p>
+                <h2 className="mt-2 font-serif text-2xl text-stone-900 dark:text-white">Production posture</h2>
+                <p className="mt-2 text-sm text-stone-500">This combines capability readiness with automation-backed operational pressure.</p>
+              </div>
+              <ToneBadge tone={getTone(data.status)}>{data.status}</ToneBadge>
             </div>
-            <ToneBadge tone={getTone(data.status)}>{data.status}</ToneBadge>
-          </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            {data.signals.map((signal) => (
-              <div key={signal.id} className="border border-stone-200 p-4 dark:border-stone-800">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-widest text-stone-400">{signal.label}</p>
-                    <p className="mt-2 break-all text-2xl font-medium text-stone-900 dark:text-white">{signal.value}</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {data.signals.map((signal) => (
+                <div key={signal.id} className="border border-stone-200 p-4 dark:border-stone-800">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-stone-400">{signal.label}</p>
+                      <p className="mt-2 break-all text-2xl font-medium text-stone-900 dark:text-white">{signal.value}</p>
+                    </div>
+                    <ToneBadge tone={signal.tone === "muted" ? "muted" : signal.tone === "info" ? "info" : signal.tone}>
+                      {signal.tone}
+                    </ToneBadge>
                   </div>
-                  <ToneBadge tone={signal.tone === "muted" ? "muted" : signal.tone === "info" ? "info" : signal.tone}>
-                    {signal.tone}
-                  </ToneBadge>
+                  <p className="mt-2 text-sm leading-relaxed text-stone-500">{signal.description}</p>
                 </div>
-                <p className="mt-2 text-sm leading-relaxed text-stone-500">{signal.description}</p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
 
-          <div className="space-y-3 border-t border-stone-100 pt-5 dark:border-stone-800">
-            <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Capability diagnostics</p>
-            {data.readinessChecks.map((check) => (
-              <div key={check.id} className="border border-stone-200 p-4 dark:border-stone-800">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-stone-900 dark:text-white">{check.label}</p>
-                    <p className="mt-1 text-sm text-stone-500">{check.description}</p>
+            <div className="space-y-3 border-t border-stone-100 pt-5 dark:border-stone-800">
+              <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Capability diagnostics</p>
+              {data.readinessChecks.map((check) => (
+                <div key={check.id} className="border border-stone-200 p-4 dark:border-stone-800">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-stone-900 dark:text-white">{check.label}</p>
+                      <p className="mt-1 text-sm text-stone-500">{check.description}</p>
+                    </div>
+                    <ToneBadge tone={check.status === "ready" ? "success" : check.status === "attention" ? "warning" : "danger"}>
+                      {check.status}
+                    </ToneBadge>
                   </div>
-                  <ToneBadge tone={check.status === "ready" ? "success" : check.status === "attention" ? "warning" : "danger"}>
-                    {check.status}
-                  </ToneBadge>
+                  <p className="mt-3 text-xs text-stone-500">{check.detail}</p>
                 </div>
-                <p className="mt-3 text-xs text-stone-500">{check.detail}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
+              ))}
+            </div>
+          </Card>
+
+          <IncidentHandoffPanel incidents={data.incidents} />
+        </div>
 
         <div className="space-y-4">
           <Card className="space-y-4 p-5">

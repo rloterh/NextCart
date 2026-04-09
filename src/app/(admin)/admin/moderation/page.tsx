@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ClipboardList, EyeOff, Package, ShieldAlert, Sparkles, Star, Store, UserRoundCheck } from "lucide-react";
@@ -58,6 +59,10 @@ const queueTabs: Array<{ label: string; value: QueueFilter }> = [
   { label: "Reviews", value: "review" },
   { label: "Orders", value: "order" },
 ];
+
+function isQueueFilter(value: string | null): value is QueueFilter {
+  return value === "all" || value === "product" || value === "vendor" || value === "review" || value === "order";
+}
 
 const severityClasses: Record<QueueSeverity, string> = {
   low: "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300",
@@ -131,6 +136,9 @@ function buildOrderItem(order: ModerationOrder): ModerationQueueItem | null {
 }
 
 export default function AdminModerationPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const addToast = useUIStore((state) => state.addToast);
   const [products, setProducts] = useState<ModerationProduct[]>([]);
   const [vendors, setVendors] = useState<ModerationVendor[]>([]);
@@ -186,6 +194,33 @@ export default function AdminModerationPage() {
   useEffect(() => {
     void fetchQueue();
   }, [fetchQueue]);
+
+  useEffect(() => {
+    const nextFilter = searchParams.get("view");
+    if (isQueueFilter(nextFilter) && nextFilter !== filter) {
+      setFilter(nextFilter);
+      return;
+    }
+
+    if (!nextFilter && filter !== "all") {
+      setFilter("all");
+    }
+  }, [filter, searchParams]);
+
+  const updateFilter = useCallback(
+    (nextFilter: QueueFilter) => {
+      setFilter(nextFilter);
+      const params = new URLSearchParams(searchParams.toString());
+      if (nextFilter === "all") {
+        params.delete("view");
+      } else {
+        params.set("view", nextFilter);
+      }
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
 
   const queueItems = useMemo(
     () =>
@@ -321,7 +356,7 @@ export default function AdminModerationPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-1">
           {queueTabs.map((tab) => (
-            <button key={tab.value} type="button" onClick={() => setFilter(tab.value)} className={`px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-colors ${filter === tab.value ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900" : "text-stone-500 hover:text-stone-900 dark:hover:text-white"}`}>
+            <button key={tab.value} type="button" onClick={() => updateFilter(tab.value)} className={`px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-colors ${filter === tab.value ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900" : "text-stone-500 hover:text-stone-900 dark:hover:text-white"}`}>
               {tab.label}
             </button>
           ))}

@@ -62,12 +62,32 @@ export interface PlatformSystemAction {
   href: string;
 }
 
+export type PlatformIncidentClass =
+  | "config_blocker"
+  | "automation_delivery"
+  | "payout_pressure"
+  | "governance_pressure";
+
+export type PlatformIncidentSeverity = "low" | "medium" | "high";
+
 export interface PlatformSystemSignal {
   id: string;
   label: string;
   value: string;
   description: string;
   tone: PlatformNotificationTone;
+}
+
+export interface PlatformIncidentHandoff {
+  id: string;
+  title: string;
+  summary: string;
+  failureClass: PlatformIncidentClass;
+  severity: PlatformIncidentSeverity;
+  requestId: string;
+  operatorGuidance: string;
+  nextSteps: string[];
+  queueLinks: PlatformSystemAction[];
 }
 
 export interface PlatformSystemPayload {
@@ -79,6 +99,7 @@ export interface PlatformSystemPayload {
   automationSummary: PlatformAutomationPayload | null;
   signals: PlatformSystemSignal[];
   actions: PlatformSystemAction[];
+  incidents: PlatformIncidentHandoff[];
 }
 
 export type PlatformNotificationTone = "info" | "success" | "warning" | "danger" | "muted";

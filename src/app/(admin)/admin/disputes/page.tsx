@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Clock3, Package, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,8 @@ type EligibleOrder = Pick<Order, "id" | "order_number" | "status" | "total" | "c
 type DisputeAction = AdminAction & {
   admin: Pick<Profile, "id" | "full_name" | "email"> | null;
 };
+
+type AssignmentFilter = "all" | "assigned" | "unassigned";
 
 const statusTabs: Array<{ label: string; value: DisputeStatus | "all" }> = [
   { label: "All", value: "all" },
@@ -77,6 +80,14 @@ const payoutHoldOptions: Array<{ label: string; value: PayoutHoldStatus }> = [
 
 const editableStatuses: DisputeStatus[] = ["open", "investigating", "vendor_action_required", "refund_pending", "resolved", "dismissed"];
 
+function isDisputeStatusFilter(value: string | null): value is DisputeStatus | "all" {
+  return value === "all" || editableStatuses.includes(value as DisputeStatus);
+}
+
+function isAssignmentFilter(value: string | null): value is AssignmentFilter {
+  return value === "all" || value === "assigned" || value === "unassigned";
+}
+
 function isMissingDisputesTable(message: string | null | undefined) {
   if (!message) return false;
   const normalized = message.toLowerCase();
@@ -107,6 +118,9 @@ function normalizeDisputeCase(entry: Partial<DisputeCaseRecord>): DisputeCaseRec
 }
 
 export default function AdminDisputesPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const addToast = useUIStore((state) => state.addToast);
   const [cases, setCases] = useState<DisputeCaseRecord[]>([]);
   const [eligibleOrders, setEligibleOrders] = useState<EligibleOrder[]>([]);
@@ -116,6 +130,7 @@ export default function AdminDisputesPage() {
   const [workflowMigrationRequired, setWorkflowMigrationRequired] = useState(false);
   const [tab, setTab] = useState<DisputesTab>("cases");
   const [filter, setFilter] = useState<DisputeStatus | "all">("all");
+  const [assignmentFilter, setAssignmentFilter] = useState<AssignmentFilter>("all");
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [issueType, setIssueType] = useState<DisputeIssueType>("refund_request");
@@ -188,7 +203,54 @@ export default function AdminDisputesPage() {
     void fetchDisputes();
   }, [fetchDisputes]);
 
-  const visibleCases = useMemo(() => cases.filter((entry) => filter === "all" || entry.status === filter), [cases, filter]);
+  useEffect(() => {
+    const nextStatus = searchParams.get("status");
+    const nextOwner = searchParams.get("owner");
+
+    if (isDisputeStatusFilter(nextStatus) && nextStatus !== filter) {
+      setFilter(nextStatus);
+    } else if (!nextStatus && filter !== "all") {
+      setFilter("all");
+    }
+
+    if (isAssignmentFilter(nextOwner) && nextOwner !== assignmentFilter) {
+      setAssignmentFilter(nextOwner);
+    } else if (!nextOwner && assignmentFilter !== "all") {
+      setAssignmentFilter("all");
+    }
+  }, [assignmentFilter, filter, searchParams]);
+
+  const updateQueueFilters = useCallback(
+    (nextStatus: DisputeStatus | "all", nextAssignment: AssignmentFilter) => {
+      setFilter(nextStatus);
+      setAssignmentFilter(nextAssignment);
+      const params = new URLSearchParams(searchParams.toString());
+      if (nextStatus === "all") {
+        params.delete("status");
+      } else {
+        params.set("status", nextStatus);
+      }
+      if (nextAssignment === "all") {
+        params.delete("owner");
+      } else {
+        params.set("owner", nextAssignment);
+      }
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
+
+  const visibleCases = useMemo(
+    () =>
+      cases.filter((entry) => {
+        if (filter !== "all" && entry.status !== filter) return false;
+        if (assignmentFilter === "assigned") return Boolean(entry.assigned_admin_id);
+        if (assignmentFilter === "unassigned") return !entry.assigned_admin_id;
+        return true;
+      }),
+    [assignmentFilter, cases, filter]
+  );
 
   useEffect(() => {
     if (!visibleCases.length) {
@@ -381,14 +443,34 @@ export default function AdminDisputesPage() {
       {tab === "cases" ? (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-1">
-            {statusTabs.map((entry) => <button key={entry.value} type="button" onClick={() => setFilter(entry.value)} className={`px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-colors ${filter === entry.value ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900" : "text-stone-500 hover:text-stone-900 dark:hover:text-white"}`}>{entry.label}</button>)}
+            {statusTabs.map((entry) => <button key={entry.value} type="button" onClick={() => updateQueueFilters(entry.value, assignmentFilter)} className={`px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-colors ${filter === entry.value ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900" : "text-stone-500 hover:text-stone-900 dark:hover:text-white"}`}>{entry.label}</button>)}
+          </div>
+          <div className="flex flex-wrap items-center gap-1">
+            {[
+              { label: "All owners", value: "all" as const },
+              { label: "Assigned", value: "assigned" as const },
+              { label: "Unassigned", value: "unassigned" as const },
+            ].map((entry) => (
+              <button
+                key={entry.value}
+                type="button"
+                onClick={() => updateQueueFilters(filter, entry.value)}
+                className={`px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-colors ${
+                  assignmentFilter === entry.value
+                    ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900"
+                    : "text-stone-500 hover:text-stone-900 dark:hover:text-white"
+                }`}
+              >
+                {entry.label}
+              </button>
+            ))}
           </div>
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_380px]">
             <Card className="p-0">
               <div className="border-b border-stone-100 px-5 py-4 dark:border-stone-800">
                 <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Case queue</p>
-                <p className="mt-1 text-sm text-stone-500">{visibleCases.length} dispute case(s) match this status view.</p>
+                <p className="mt-1 text-sm text-stone-500">{visibleCases.length} dispute case(s) match this review view.</p>
               </div>
               {loading ? (
                 <div className="space-y-3 p-5">{Array.from({ length: 5 }).map((_, index) => <SkeletonBlock key={index} lines={3} />)}</div>
