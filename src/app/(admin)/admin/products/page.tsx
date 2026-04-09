@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { Archive, Eye, Package, PauseCircle, PlayCircle, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { ProductStatusBadge, ToneBadge } from "@/components/ui/status-badge";
 import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { useUIStore } from "@/stores/ui-store";
@@ -27,15 +28,18 @@ const moderationFilters: Array<{ label: string; value: ProductStatus | "all" }> 
 ];
 
 export default function AdminProductsPage() {
+  const router = useRouter();
   const addToast = useUIStore((state) => state.addToast);
   const [products, setProducts] = useState<ModerationProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<ProductStatus | "all">("all");
   const [search, setSearch] = useState("");
   const [activeProductId, setActiveProductId] = useState<string | null>(null);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
+    setError(null);
     const supabase = getSupabaseBrowserClient();
     let query = supabase
       .from("products")
@@ -45,7 +49,15 @@ export default function AdminProductsPage() {
     if (filter !== "all") query = query.eq("status", filter);
     if (search) query = query.ilike("name", `%${search}%`);
 
-    const { data } = await query;
+    const { data, error: queryError } = await query;
+
+    if (queryError) {
+      setProducts([]);
+      setError(queryError.message);
+      setLoading(false);
+      return;
+    }
+
     setProducts((data ?? []) as ModerationProduct[]);
     setLoading(false);
   }, [filter, search]);
@@ -84,13 +96,17 @@ export default function AdminProductsPage() {
   );
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+    <PageTransition className="space-y-6">
+      <PageIntro
+        eyebrow="Governance"
+        title="Product moderation"
+        description="Review catalog quality, elevate standout listings, and pause products that should not be merchandised right now."
+      />
+
       <Card className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <CardTitle>Product moderation</CardTitle>
-          <CardDescription>
-            Review catalog quality, elevate standout listings, and pause products that should not be merchandised right now.
-          </CardDescription>
+          <CardTitle>Moderation snapshot</CardTitle>
+          <CardDescription>Search across the catalog, verify visibility state, and apply marketplace actions with confidence.</CardDescription>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -129,18 +145,29 @@ export default function AdminProductsPage() {
       </div>
 
       <Card className="overflow-hidden p-0">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-stone-100 dark:border-stone-800">
-              <th className="px-4 py-3 text-left text-[10px] font-medium uppercase tracking-widest text-stone-400">Product</th>
-              <th className="px-4 py-3 text-left text-[10px] font-medium uppercase tracking-widest text-stone-400">Store</th>
-              <th className="px-4 py-3 text-left text-[10px] font-medium uppercase tracking-widest text-stone-400">Status</th>
-              <th className="px-4 py-3 text-left text-[10px] font-medium uppercase tracking-widest text-stone-400">Signals</th>
-              <th className="px-4 py-3 text-right text-[10px] font-medium uppercase tracking-widest text-stone-400">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
+        {error ? (
+          <div className="p-6">
+            <StatePanel
+              title="We could not load the moderation catalog"
+              description={error}
+              tone="danger"
+              actionLabel="Retry moderation view"
+              onAction={() => void fetchProducts()}
+            />
+          </div>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-stone-100 dark:border-stone-800">
+                <th className="px-4 py-3 text-left text-[10px] font-medium uppercase tracking-widest text-stone-400">Product</th>
+                <th className="px-4 py-3 text-left text-[10px] font-medium uppercase tracking-widest text-stone-400">Store</th>
+                <th className="px-4 py-3 text-left text-[10px] font-medium uppercase tracking-widest text-stone-400">Status</th>
+                <th className="px-4 py-3 text-left text-[10px] font-medium uppercase tracking-widest text-stone-400">Signals</th>
+                <th className="px-4 py-3 text-right text-[10px] font-medium uppercase tracking-widest text-stone-400">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
               Array.from({ length: 6 }).map((_, index) => (
                 <tr key={index} className="border-b border-stone-50 dark:border-stone-800/50">
                   {Array.from({ length: 5 }).map((_, cellIndex) => (
@@ -150,7 +177,7 @@ export default function AdminProductsPage() {
                   ))}
                 </tr>
               ))
-            ) : products.length === 0 ? (
+              ) : products.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-16 text-center">
                   <StatePanel
@@ -161,7 +188,7 @@ export default function AdminProductsPage() {
                   />
                 </td>
               </tr>
-            ) : (
+              ) : (
               products.map((product) => (
                 <tr key={product.id} className="border-b border-stone-50 hover:bg-stone-50/50 dark:border-stone-800/50 dark:hover:bg-stone-800/20">
                   <td className="px-4 py-3.5">
@@ -197,6 +224,11 @@ export default function AdminProductsPage() {
                       <Link href={`/products/${product.store_id}/${product.slug}`} target="_blank" rel="noreferrer">
                         <Button size="sm" variant="ghost" leftIcon={<Eye className="h-3.5 w-3.5" />}>View</Button>
                       </Link>
+                      {product.store?.slug ? (
+                        <Link href={`/vendors/${product.store.slug}`} target="_blank" rel="noreferrer">
+                          <Button size="sm" variant="ghost">Store</Button>
+                        </Link>
+                      ) : null}
                       <Button size="sm" variant="ghost" isLoading={activeProductId === product.id} disabled={activeProductId === product.id} leftIcon={<Sparkles className="h-3.5 w-3.5" />} onClick={() => void updateProduct(product.id, { is_featured: !product.is_featured })}>
                         {product.is_featured ? "Unfeature" : "Feature"}
                       </Button>
@@ -216,10 +248,16 @@ export default function AdminProductsPage() {
                   </td>
                 </tr>
               ))
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        )}
       </Card>
-    </motion.div>
+      <div className="flex justify-end">
+        <Button type="button" variant="ghost" onClick={() => router.push("/admin/moderation")}>
+          Open broader moderation queue
+        </Button>
+      </div>
+    </PageTransition>
   );
 }
