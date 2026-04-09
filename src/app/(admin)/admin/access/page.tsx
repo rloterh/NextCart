@@ -206,6 +206,42 @@ export default function AdminAccessPage() {
         <div className="space-y-4">
           <Card className="space-y-4 p-5">
             <div>
+              <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Compliance evidence</p>
+              <h2 className="mt-2 font-serif text-2xl text-stone-900 dark:text-white">Review quality</h2>
+              <p className="mt-2 text-sm text-stone-500">These evidence signals help internal reviewers spot whether privileged changes are meeting the intended governance standard.</p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="border border-stone-200 p-4 dark:border-stone-800">
+                <p className="text-[10px] uppercase tracking-widest text-stone-400">Reason coverage</p>
+                <p className="mt-2 text-2xl font-medium text-stone-900 dark:text-white">{Math.round(data.evidence.reasonCoverage * 100)}%</p>
+                <p className="mt-1 text-sm text-stone-500">Recent privileged changes with a usable rationale.</p>
+              </div>
+              <div className="border border-stone-200 p-4 dark:border-stone-800">
+                <p className="text-[10px] uppercase tracking-widest text-stone-400">Trace coverage</p>
+                <p className="mt-2 text-2xl font-medium text-stone-900 dark:text-white">{Math.round(data.evidence.traceCoverage * 100)}%</p>
+                <p className="mt-1 text-sm text-stone-500">Recent access changes linked to a request trace.</p>
+              </div>
+              <div className="border border-stone-200 p-4 dark:border-stone-800">
+                <p className="text-[10px] uppercase tracking-widest text-stone-400">High-sensitivity events</p>
+                <p className="mt-2 text-2xl font-medium text-stone-900 dark:text-white">{data.evidence.highSensitivityCount}</p>
+                <p className="mt-1 text-sm text-stone-500">Recent changes that touched the highest-risk workflow tier.</p>
+              </div>
+              <div className="border border-stone-200 p-4 dark:border-stone-800">
+                <p className="text-[10px] uppercase tracking-widest text-stone-400">Admin transitions</p>
+                <p className="mt-2 text-2xl font-medium text-stone-900 dark:text-white">{data.evidence.adminTransitionCount}</p>
+                <p className="mt-1 text-sm text-stone-500">Recent role changes that added or removed admin access.</p>
+              </div>
+              <div className="border border-stone-200 p-4 dark:border-stone-800">
+                <p className="text-[10px] uppercase tracking-widest text-stone-400">Flagged evidence gaps</p>
+                <p className="mt-2 text-2xl font-medium text-stone-900 dark:text-white">{data.evidence.flaggedCount}</p>
+                <p className="mt-1 text-sm text-stone-500">Elevated or high-sensitivity changes missing rationale or trace coverage.</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="space-y-4 p-5">
+            <div>
               <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Guardrails</p>
               <h2 className="mt-2 font-serif text-2xl text-stone-900 dark:text-white">Access safety posture</h2>
               <p className="mt-2 text-sm text-stone-500">These checks keep role changes disciplined before they turn into governance or support issues.</p>

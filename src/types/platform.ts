@@ -175,6 +175,14 @@ export interface PlatformAccessGuardrail {
   href: string | null;
 }
 
+export interface PlatformAccessEvidenceSummary {
+  reasonCoverage: number;
+  traceCoverage: number;
+  highSensitivityCount: number;
+  adminTransitionCount: number;
+  flaggedCount: number;
+}
+
 export interface PlatformPrivilegedAccessEvent {
   id: string;
   action: string;
@@ -195,6 +203,7 @@ export interface PlatformAccessPayload {
   requestId: string;
   generatedAt: string;
   summary: PlatformAccessSummary;
+  evidence: PlatformAccessEvidenceSummary;
   roles: PlatformAccessRoleDefinition[];
   guardrails: PlatformAccessGuardrail[];
   recentActions: PlatformPrivilegedAccessEvent[];

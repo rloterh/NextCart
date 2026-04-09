@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Clock3, Package, Scale } from "lucide-react";
+import { SensitiveActionReview } from "@/components/platform/sensitive-action-review";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageIntro, PageTransition } from "@/components/ui/page-shell";
@@ -10,6 +11,7 @@ import { PriorityBadge, ToneBadge } from "@/components/ui/status-badge";
 import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { recordAdminAction } from "@/lib/admin/audit";
 import { getDisputeSlaState, getSlaToneClasses } from "@/lib/admin/governance";
+import { getSensitiveWorkflowReview } from "@/lib/platform/access-review";
 import { getDisputeEscalationMessage } from "@/lib/platform/notifications";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUIStore } from "@/stores/ui-store";
@@ -141,6 +143,7 @@ export default function AdminDisputesPage() {
   const [refundAmount, setRefundAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [savingCase, setSavingCase] = useState(false);
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [admins, setAdmins] = useState<Array<Pick<Profile, "id" | "full_name" | "email">>>([]);
   const [actionHistory, setActionHistory] = useState<Record<string, DisputeAction[]>>({});
 
@@ -266,6 +269,10 @@ export default function AdminDisputesPage() {
     if (!selectedOrderId && eligibleOrders.length > 0) setSelectedOrderId(eligibleOrders[0].id);
   }, [eligibleOrders, selectedOrderId]);
 
+  useEffect(() => {
+    setReviewConfirmed(false);
+  }, [selectedCaseId]);
+
   const selectedCase = visibleCases.find((entry) => entry.id === selectedCaseId) ?? null;
   const selectedOrder = eligibleOrders.find((entry) => entry.id === selectedOrderId) ?? null;
   const selectedHistory = selectedCase ? actionHistory[selectedCase.id] ?? [] : [];
@@ -281,6 +288,14 @@ export default function AdminDisputesPage() {
     atRisk: activeCases.filter((entry) => getDisputeSlaState(entry.created_at, entry.priority, entry.status).tone === "warning").length,
     unassigned: activeCases.filter((entry) => !entry.assigned_admin_id).length,
   });
+  const needsSensitiveReview = Boolean(
+    selectedCase &&
+      (selectedCase.refund_decision === "issued" ||
+        selectedCase.payout_hold_status === "on_hold" ||
+        selectedCase.status === "resolved" ||
+        selectedCase.status === "dismissed")
+  );
+  const sensitiveReview = needsSensitiveReview ? getSensitiveWorkflowReview({ key: "dispute_finance" }) : null;
 
   async function getCurrentAdminId() {
     const supabase = getSupabaseBrowserClient();
@@ -359,6 +374,22 @@ export default function AdminDisputesPage() {
 
   async function updateSelectedCase() {
     if (!selectedCase) return;
+    if (needsSensitiveReview && (selectedCase.admin_notes?.trim().length ?? 0) < 16) {
+      addToast({
+        type: "error",
+        title: "Admin notes required",
+        description: "Capture enough case context before saving a sensitive refund, payout-hold, or resolution decision.",
+      });
+      return;
+    }
+    if (needsSensitiveReview && !reviewConfirmed) {
+      addToast({
+        type: "error",
+        title: "Review checkpoint required",
+        description: "Confirm the refund and payout review checklist before saving this case.",
+      });
+      return;
+    }
     const adminId = await getCurrentAdminId();
     if (!adminId) return;
     setSavingCase(true);
@@ -410,6 +441,7 @@ export default function AdminDisputesPage() {
       capability: "dispute_workflow",
     });
     addToast({ type: "success", title: "Dispute case updated", description: "The workflow state and notes were saved." });
+    setReviewConfirmed(false);
     await fetchDisputes();
     setSavingCase(false);
   }
@@ -565,6 +597,14 @@ export default function AdminDisputesPage() {
                     <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Admin notes<textarea rows={4} value={selectedCase.admin_notes ?? ""} onChange={(event) => patchSelectedCase({ admin_notes: event.target.value })} className="border border-stone-200 bg-transparent px-3 py-2 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200" /></label>
                     <label className="grid gap-2 text-xs font-medium uppercase tracking-widest text-stone-400">Resolution notes<textarea rows={3} value={selectedCase.resolution ?? ""} onChange={(event) => patchSelectedCase({ resolution: event.target.value })} className="border border-stone-200 bg-transparent px-3 py-2 text-sm font-normal text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:text-stone-200" /></label>
                   </div>
+
+                  {sensitiveReview ? (
+                    <SensitiveActionReview
+                      review={sensitiveReview}
+                      checked={reviewConfirmed}
+                      onCheckedChange={setReviewConfirmed}
+                    />
+                  ) : null}
 
                   <div>
                     <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Case history</p>

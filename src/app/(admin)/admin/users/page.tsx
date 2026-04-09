@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, Shield, ShieldAlert, ShoppingBag, Store, UserCog, Users } from "lucide-react";
 import { ROLE_METADATA } from "@/config/roles";
+import { SensitiveActionReview } from "@/components/platform/sensitive-action-review";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { ToneBadge } from "@/components/ui/status-badge";
+import { getSensitiveWorkflowReview } from "@/lib/platform/access-review";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatDate } from "@/lib/utils/constants";
 import { useUIStore } from "@/stores/ui-store";
@@ -33,6 +35,7 @@ export default function AdminUsersPage() {
   const [reviewingUserId, setReviewingUserId] = useState<string | null>(null);
   const [pendingRole, setPendingRole] = useState<UserRole>("buyer");
   const [changeReason, setChangeReason] = useState("");
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
 
   const fetchUsers = useCallback(async () => {
@@ -69,6 +72,7 @@ export default function AdminUsersPage() {
     if (reviewingUserId && !users.some((user) => user.id === reviewingUserId)) {
       setReviewingUserId(null);
       setChangeReason("");
+      setReviewConfirmed(false);
     }
   }, [reviewingUserId, users]);
 
@@ -86,6 +90,7 @@ export default function AdminUsersPage() {
     setReviewingUserId(user.id);
     setPendingRole(user.role);
     setChangeReason("");
+    setReviewConfirmed(false);
   }
 
   async function submitAccessChange(user: Profile) {
@@ -99,6 +104,15 @@ export default function AdminUsersPage() {
         type: "error",
         title: "Reason required",
         description: "Add a clear reason with at least 12 characters so the access review is auditable.",
+      });
+      return;
+    }
+
+    if (!reviewConfirmed) {
+      addToast({
+        type: "error",
+        title: "Review checkpoint required",
+        description: "Confirm the access review checklist before applying this role change.",
       });
       return;
     }
@@ -138,6 +152,7 @@ export default function AdminUsersPage() {
       });
       setReviewingUserId(null);
       setChangeReason("");
+      setReviewConfirmed(false);
     } catch (updateError) {
       addToast({
         type: "error",
@@ -253,6 +268,14 @@ export default function AdminUsersPage() {
               users.flatMap((user) => {
                 const RoleIcon = roleIcons[user.role];
                 const isReviewing = reviewingUserId === user.id;
+                const review = getSensitiveWorkflowReview({
+                  key: "role_change",
+                  context: {
+                    fromRole: user.role,
+                    toRole: pendingRole,
+                    touchesAdmin: user.role === "admin" || pendingRole === "admin",
+                  },
+                });
 
                 return [
                   <tr
@@ -288,7 +311,10 @@ export default function AdminUsersPage() {
                                 <span className="text-[10px] font-medium uppercase tracking-widest text-stone-400">New role</span>
                                 <select
                                   value={pendingRole}
-                                  onChange={(event) => setPendingRole(event.target.value as UserRole)}
+                                  onChange={(event) => {
+                                    setPendingRole(event.target.value as UserRole);
+                                    setReviewConfirmed(false);
+                                  }}
                                   className="h-10 w-full border border-stone-200 bg-white px-3 text-sm text-stone-700 focus:border-stone-900 focus:outline-none dark:border-stone-700 dark:bg-stone-950 dark:text-stone-200"
                                 >
                                   <option value="buyer">Buyer</option>
@@ -309,7 +335,14 @@ export default function AdminUsersPage() {
                               </label>
 
                               <div className="flex items-center gap-2 xl:justify-end">
-                                <Button variant="ghost" size="sm" onClick={() => setReviewingUserId(null)}>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setReviewingUserId(null);
+                                    setReviewConfirmed(false);
+                                  }}
+                                >
                                   Cancel
                                 </Button>
                                 <Button
@@ -320,6 +353,14 @@ export default function AdminUsersPage() {
                                   Apply access change
                                 </Button>
                               </div>
+                            </div>
+
+                            <div className="mt-4">
+                              <SensitiveActionReview
+                                review={review}
+                                checked={reviewConfirmed}
+                                onCheckedChange={setReviewConfirmed}
+                              />
                             </div>
 
                             <div className="mt-3 flex flex-wrap items-start gap-2 text-xs text-stone-500">

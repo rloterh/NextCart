@@ -108,6 +108,13 @@ export async function buildPlatformAccessPayload({
 
   const reasonCoverage = recentActions.length ? recentActions.filter((action) => action.reasonProvided).length / recentActions.length : 0;
   const traceCoverage = recentActions.length ? recentActions.filter((action) => action.requestId).length / recentActions.length : 0;
+  const highSensitivityCount = recentActions.filter((action) => action.sensitivity === "high").length;
+  const adminTransitionCount = recentActions.filter((action) => action.fromRole === "admin" || action.toRole === "admin").length;
+  const flaggedCount = recentActions.filter(
+    (action) =>
+      (action.sensitivity === "high" || action.sensitivity === "elevated") &&
+      (!action.reasonProvided || !action.requestId)
+  ).length;
 
   const guardrails = [
     {
@@ -185,6 +192,13 @@ export async function buildPlatformAccessPayload({
     requestId: trace.requestId,
     generatedAt: new Date().toISOString(),
     summary,
+    evidence: {
+      reasonCoverage,
+      traceCoverage,
+      highSensitivityCount,
+      adminTransitionCount,
+      flaggedCount,
+    },
     roles,
     guardrails,
     recentActions,
