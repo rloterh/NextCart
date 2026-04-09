@@ -75,6 +75,13 @@ export const PLATFORM_CAPABILITY_DEFINITIONS: PlatformCapabilityDefinition[] = [
     requiredEnv: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"],
     audience: ["vendor", "admin"],
   },
+  {
+    id: "notification_delivery",
+    label: "Notification delivery",
+    description: "Transactional email delivery for marketplace digests, escalations, and later event-driven notifications.",
+    requiredEnv: ["RESEND_API_KEY", "NOTIFICATION_FROM_EMAIL"],
+    audience: ["vendor", "admin"],
+  },
 ];
 
 export const PLATFORM_EVENT_DEFINITIONS: PlatformEventDefinition[] = [
