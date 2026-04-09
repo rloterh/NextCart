@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, ArrowUpRight, CreditCard, ShieldCheck, Store, Wallet } from "lucide-react";
 import { EventScaffoldPanel } from "@/components/platform/event-scaffold-panel";
 import { LaunchReadinessPanel } from "@/components/platform/launch-readiness-panel";
+import { DelayDigestPanel } from "@/components/platform/delay-digest-panel";
 import { PlatformInboxPanel } from "@/components/platform/platform-inbox-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
@@ -855,6 +856,11 @@ export function VendorSettingsPageClient({ stripeState }: VendorSettingsPageClie
             description="Quiet event follow-up for order exceptions, dispute changes, moderation outcomes, and settlement updates."
             emptyTitle="Your operations inbox is clear"
             emptyDescription="As your store sees payout, dispute, or moderation activity, the next steps will appear here."
+          />
+
+          <DelayDigestPanel
+            title="Operations delay digest"
+            description="A concise operational summary for settlement lag, dispute pressure, and unread follow-up that can be emailed to your account inbox."
           />
 
           <EventScaffoldPanel

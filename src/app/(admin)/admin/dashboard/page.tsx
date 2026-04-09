@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, Clock3, DollarSign, EyeOff, Package, Scale, ShieldAlert, ShoppingCart, Store, TrendingUp, Users } from "lucide-react";
 import { EventScaffoldPanel } from "@/components/platform/event-scaffold-panel";
 import { LaunchReadinessPanel } from "@/components/platform/launch-readiness-panel";
+import { DelayDigestPanel } from "@/components/platform/delay-digest-panel";
 import { PlatformInboxPanel } from "@/components/platform/platform-inbox-panel";
 import { Card } from "@/components/ui/card";
 import { PageIntro, PageTransition } from "@/components/ui/page-shell";
@@ -358,12 +359,17 @@ export default function AdminDashboard() {
         </div>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid gap-6 xl:grid-cols-2">
         <PlatformInboxPanel
           title="Governance inbox"
           description="Operational events that need review, assignment, or escalation before trust issues spread."
           emptyTitle="Governance inbox is clear"
           emptyDescription="Disputes, moderation actions, and settlement alerts will appear here when intervention is needed."
+        />
+
+        <DelayDigestPanel
+          title="Marketplace governance digest"
+          description="A role-aware delay summary for disputes, moderation pressure, and payout lag, ready to email when delivery is configured."
         />
 
         <LaunchReadinessPanel
