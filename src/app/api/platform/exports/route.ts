@@ -52,6 +52,13 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const kind = searchParams.get("kind") as PlatformExportKind | null;
   const format = (searchParams.get("format") as PlatformExportFormat | null) ?? "csv";
+  const status = searchParams.get("status");
+  const assignment = searchParams.get("assignment");
+  const sla = searchParams.get("sla");
+  const scope = searchParams.get("scope");
+  const windowDays = searchParams.get("windowDays");
+  const onlyFlagged = searchParams.get("onlyFlagged") === "true";
+  const agedOnly = searchParams.get("agedOnly") === "true";
 
   if (!kind) {
     return NextResponse.json({ error: "kind is required" }, { status: 400 });
@@ -67,6 +74,15 @@ export async function GET(request: Request) {
       profile: context.profile,
       kind,
       format,
+      filters: {
+        status,
+        assignment: assignment === "assigned" || assignment === "unassigned" ? assignment : "all",
+        sla: sla === "breached" || sla === "at_risk" ? sla : "all",
+        scope: scope === "pending_vendors" || scope === "hidden_reviews" ? scope : "all",
+        onlyFlagged,
+        agedOnly,
+        windowDays: windowDays ? Number(windowDays) : null,
+      },
     });
 
     return new NextResponse(exportFile.body, {

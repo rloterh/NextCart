@@ -75,6 +75,16 @@ interface VendorAutomationDataset {
   emailDeliveryAvailable: boolean;
 }
 
+interface PlatformExportFilters {
+  windowDays?: number | null;
+  status?: string | null;
+  sla?: "all" | "breached" | "at_risk";
+  onlyFlagged?: boolean;
+  assignment?: "all" | "assigned" | "unassigned";
+  scope?: "all" | "pending_vendors" | "hidden_reviews";
+  agedOnly?: boolean;
+}
+
 function unwrapRelation<T>(value: T | T[] | null | undefined) {
   if (Array.isArray(value)) {
     return value[0] ?? null;
@@ -141,6 +151,18 @@ function buildExportDefinitions(audience: PlatformOperatorAudience): PlatformExp
         description: "Settlement-ready handoff for your store's payout and reconciliation review.",
         formats: ["csv", "json"],
         href: "/api/platform/exports?kind=vendor_payout_review",
+        presets: [
+          {
+            label: "Lagging settlements",
+            description: "Only delivered orders still waiting on payout settlement.",
+            href: "/api/platform/exports?kind=vendor_payout_review&onlyFlagged=true&status=delivered",
+          },
+          {
+            label: "Last 14 days",
+            description: "Recent settlement activity for week-over-week finance review.",
+            href: "/api/platform/exports?kind=vendor_payout_review&windowDays=14",
+          },
+        ],
       },
     ];
   }
@@ -152,6 +174,18 @@ function buildExportDefinitions(audience: PlatformOperatorAudience): PlatformExp
       description: "Delivered-order settlement handoff for finance or ops review.",
       formats: ["csv", "json"],
       href: "/api/platform/exports?kind=admin_payout_review",
+      presets: [
+        {
+          label: "Settlement lag only",
+          description: "Delivered orders still missing paid transfer status.",
+          href: "/api/platform/exports?kind=admin_payout_review&onlyFlagged=true&status=delivered",
+        },
+        {
+          label: "Last 7 days",
+          description: "Recent settlement activity for daily finance reconciliation.",
+          href: "/api/platform/exports?kind=admin_payout_review&windowDays=7",
+        },
+      ],
     },
     {
       kind: "dispute_queue",
@@ -159,6 +193,18 @@ function buildExportDefinitions(audience: PlatformOperatorAudience): PlatformExp
       description: "Current dispute workflow snapshot with SLA pressure, ownership, and refund posture.",
       formats: ["csv", "json"],
       href: "/api/platform/exports?kind=dispute_queue",
+      presets: [
+        {
+          label: "SLA breaches",
+          description: "Only overdue dispute cases that need immediate intervention.",
+          href: "/api/platform/exports?kind=dispute_queue&sla=breached",
+        },
+        {
+          label: "Unassigned disputes",
+          description: "Active cases still waiting on a clear owner.",
+          href: "/api/platform/exports?kind=dispute_queue&assignment=unassigned",
+        },
+      ],
     },
     {
       kind: "moderation_backlog",
@@ -166,6 +212,18 @@ function buildExportDefinitions(audience: PlatformOperatorAudience): PlatformExp
       description: "Pending vendor and hidden-review backlog for governance handoff.",
       formats: ["csv", "json"],
       href: "/api/platform/exports?kind=moderation_backlog",
+      presets: [
+        {
+          label: "Aged backlog",
+          description: "Only moderation items that have already started to age.",
+          href: "/api/platform/exports?kind=moderation_backlog&agedOnly=true",
+        },
+        {
+          label: "Pending vendors only",
+          description: "Focus strictly on vendor approval backlog.",
+          href: "/api/platform/exports?kind=moderation_backlog&scope=pending_vendors",
+        },
+      ],
     },
   ];
 }
@@ -619,16 +677,82 @@ function formatExportResult(
   };
 }
 
+function filterOrders(
+  orders: OrderSummary[],
+  filters: PlatformExportFilters
+) {
+  const now = Date.now();
+  return orders.filter((order) => {
+    if (filters.status && order.status !== filters.status) {
+      return false;
+    }
+
+    if (filters.windowDays && now - new Date(order.updated_at).getTime() > filters.windowDays * 24 * 60 * 60 * 1000) {
+      return false;
+    }
+
+    if (filters.onlyFlagged) {
+      const anomaly = getPayoutAnomaly(order.status, order.stripe_transfer_id, order.stripe_transfer_status, order.payout_reconciled_at);
+      const laggingSettlement = order.status === "delivered" && order.stripe_transfer_status !== "paid";
+      if (!anomaly && !laggingSettlement) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+}
+
+function filterDisputes(
+  disputes: DisputeSummary[],
+  filters: PlatformExportFilters
+) {
+  return disputes.filter((dispute) => {
+    if (filters.status && dispute.status !== filters.status) {
+      return false;
+    }
+
+    if (filters.assignment === "unassigned" && dispute.assigned_admin_id) {
+      return false;
+    }
+
+    if (filters.assignment === "assigned" && !dispute.assigned_admin_id) {
+      return false;
+    }
+
+    if (filters.sla && filters.sla !== "all") {
+      const sla = getDisputeSlaState(dispute.created_at, dispute.priority, dispute.status);
+      if (filters.sla === "breached" && sla.tone !== "danger") {
+        return false;
+      }
+      if (filters.sla === "at_risk" && !["danger", "warning"].includes(sla.tone)) {
+        return false;
+      }
+    }
+
+    if (filters.windowDays) {
+      const ageMs = Date.now() - new Date(dispute.updated_at).getTime();
+      if (ageMs > filters.windowDays * 24 * 60 * 60 * 1000) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+}
+
 export async function exportPlatformData({
   supabase,
   profile,
   kind,
   format,
+  filters,
 }: {
   supabase: SupabaseClient;
   profile: OperatorProfile;
   kind: PlatformExportKind;
   format: PlatformExportFormat;
+  filters: PlatformExportFilters;
 }) {
   if (profile.role === "vendor") {
     if (kind !== "vendor_payout_review") {
@@ -636,7 +760,7 @@ export async function exportPlatformData({
     }
 
     const dataset = await fetchVendorAutomationDataset(supabase, profile, [], false);
-    const rows = dataset.orders.map((order) => ({
+    const rows = filterOrders(dataset.orders, filters).map((order) => ({
       order_number: order.order_number,
       store_name: dataset.store.name,
       order_status: order.status,
@@ -656,7 +780,7 @@ export async function exportPlatformData({
       return formatExportResult(
         kind,
         format,
-        adminDataset.orders.map((order) => ({
+        filterOrders(adminDataset.orders, filters).map((order) => ({
           order_number: order.order_number,
           store_name: order.store?.name ?? "Unknown store",
           order_status: order.status,
@@ -670,7 +794,7 @@ export async function exportPlatformData({
       return formatExportResult(
         kind,
         format,
-        adminDataset.disputes.map((dispute) => {
+        filterDisputes(adminDataset.disputes, filters).map((dispute) => {
           const sla = getDisputeSlaState(dispute.created_at, dispute.priority, dispute.status);
           return {
             order_number: dispute.order?.order_number ?? "Unknown order",
@@ -691,14 +815,34 @@ export async function exportPlatformData({
         kind,
         format,
         [
-          ...adminDataset.pendingStores.map((store) => ({
+          ...adminDataset.pendingStores
+            .filter((store) => {
+              if (filters.scope === "hidden_reviews") {
+                return false;
+              }
+              if (!filters.agedOnly) {
+                return true;
+              }
+              return Date.now() - new Date(store.created_at).getTime() >= 24 * 60 * 60 * 1000;
+            })
+            .map((store) => ({
             entity_type: "vendor",
             title: store.name,
             detail: store.slug,
             backlog_signal: "pending_approval",
             created_at: store.created_at,
           })),
-          ...adminDataset.hiddenReviews.map((review) => ({
+          ...adminDataset.hiddenReviews
+            .filter((review) => {
+              if (filters.scope === "pending_vendors") {
+                return false;
+              }
+              if (!filters.agedOnly) {
+                return true;
+              }
+              return Date.now() - new Date(review.created_at).getTime() >= 12 * 60 * 60 * 1000;
+            })
+            .map((review) => ({
             entity_type: "review",
             title: review.title || `${review.rating}-star review`,
             detail: review.store?.name ?? "Unknown store",
@@ -718,12 +862,14 @@ export async function runPlatformAutomationJob({
   jobKey,
   inboxPreview,
   emailDeliveryAvailable,
+  deliverDigest,
 }: {
   supabase: SupabaseClient;
   profile: OperatorProfile;
   jobKey: PlatformAutomationJobKey;
   inboxPreview: PlatformInboxItem[];
   emailDeliveryAvailable: boolean;
+  deliverDigest?: boolean;
 }): Promise<PlatformAutomationRunPayload> {
   const payload = await buildPlatformAutomationPayload({
     supabase,
@@ -745,7 +891,9 @@ export async function runPlatformAutomationJob({
 
   const nextAction =
     job.key === "delay_digest"
-      ? "Use this schedule-ready boundary to hand the digest to your eventual cron or queue runner."
+      ? deliverDigest
+        ? "The digest delivery boundary ran to policy recipients. Keep the trigger secret configured before wiring production cron."
+        : "Use this schedule-ready boundary to hand the digest to your eventual cron or queue runner."
       : job.key === "stale_dispute_reminder"
         ? "Route the dispute queue export to the assigned governance owner and clear unowned cases first."
         : job.key === "moderation_backlog_reminder"

@@ -168,6 +168,32 @@ export function AutomationOpsPanel({
                         </Link>
                       ))}
                     </div>
+                    {entry.presets?.length ? (
+                      <div className="mt-3 space-y-2">
+                        {entry.presets.map((preset) => (
+                          <div key={preset.label} className="flex flex-col gap-2 border border-dashed border-stone-200 p-3 text-xs text-stone-500 dark:border-stone-700">
+                            <div>
+                              <p className="font-medium uppercase tracking-wider text-stone-700 dark:text-stone-200">
+                                {preset.label}
+                              </p>
+                              <p className="mt-1 leading-relaxed">{preset.description}</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {entry.formats.map((format) => (
+                                <Link
+                                  key={`${preset.label}-${format}`}
+                                  href={`${preset.href}&format=${format}`}
+                                  className="inline-flex items-center gap-2 border border-stone-200 px-3 py-2 font-medium uppercase tracking-wider text-stone-600 transition-colors hover:border-stone-900 hover:text-stone-900 dark:border-stone-700 dark:text-stone-300 dark:hover:border-white dark:hover:text-white"
+                                >
+                                  <Download className="h-3.5 w-3.5" />
+                                  {preset.label} {format}
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-stone-500">
                     <MailCheck className="h-3.5 w-3.5" />

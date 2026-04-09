@@ -4,6 +4,7 @@ import {
   isAutomationSecretValid,
   runPlatformAutomationJob,
 } from "@/lib/platform/automation";
+import { sendDigestForProfile } from "@/lib/platform/digest-service";
 import { createPlatformCapabilityErrorResponse, getServerPlatformChecks } from "@/lib/platform/readiness.server";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
@@ -13,9 +14,31 @@ import type { Profile } from "@/types";
 type OperatorProfile = Pick<Profile, "id" | "role" | "full_name" | "email">;
 
 async function resolveOperatorContext(request: Request) {
+  const url = new URL(request.url);
   if (isAutomationSecretValid(request)) {
+    const adminSupabase = getSupabaseAdminClient();
+    const audience = url.searchParams.get("audience");
+    const ownerId = url.searchParams.get("ownerId");
+
+    if (audience === "vendor" && ownerId) {
+      const { data: profile, error } = await adminSupabase
+        .from("profiles")
+        .select("id, role, full_name, email")
+        .eq("id", ownerId)
+        .single();
+
+      if (error || !profile || profile.role !== "vendor") {
+        return null;
+      }
+
+      return {
+        supabase: adminSupabase,
+        profile: profile as OperatorProfile,
+      };
+    }
+
     return {
-      supabase: getSupabaseAdminClient(),
+      supabase: adminSupabase,
       profile: {
         id: "scheduled-admin",
         role: "admin",
@@ -60,6 +83,35 @@ export async function GET(request: Request) {
   }
 
   try {
+    const { searchParams } = new URL(request.url);
+    const run = searchParams.get("run") as PlatformAutomationJobKey | null;
+    const deliver = searchParams.get("deliver") === "policy";
+
+    if (run) {
+      const payload = await runPlatformAutomationJob({
+        supabase: context.supabase,
+        profile: context.profile,
+        jobKey: run,
+        inboxPreview: [],
+        emailDeliveryAvailable: getEmailDeliveryAvailable(),
+        deliverDigest: deliver,
+      });
+
+      const delivery =
+        deliver && run === "delay_digest"
+          ? await sendDigestForProfile({
+              supabase: context.supabase,
+              profile: context.profile,
+              scope: "policy",
+            })
+          : null;
+
+      return NextResponse.json({
+        ...payload,
+        deliveredRecipientCount: delivery?.recipientCount ?? 0,
+      });
+    }
+
     const payload = await buildPlatformAutomationPayload({
       supabase: context.supabase,
       profile: context.profile,
