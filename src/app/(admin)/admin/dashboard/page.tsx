@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { AlertTriangle, DollarSign, Package, ShieldAlert, ShoppingCart, Store, TrendingUp, Users } from "lucide-react";
+import { AlertTriangle, DollarSign, EyeOff, Package, Scale, ShieldAlert, ShoppingCart, Store, TrendingUp, Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { isExceptionStatus, isReturnStatus } from "@/lib/orders/operations-metrics";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -34,6 +34,9 @@ export default function AdminDashboard() {
     exceptionOrders: 0,
     payoutAlerts: 0,
     unresolvedReturns: 0,
+    hiddenReviews: 0,
+    openDisputes: 0,
+    suspendedVendors: 0,
   });
   const [riskQueue, setRiskQueue] = useState<RiskQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,12 +44,14 @@ export default function AdminDashboard() {
   useEffect(() => {
     async function fetch() {
       const sb = getSupabaseBrowserClient();
-      const [usersRes, storesRes, pendingRes, productsRes, ordersRes] = await Promise.all([
+      const [usersRes, storesRes, pendingRes, productsRes, ordersRes, hiddenReviewsRes, disputesRes] = await Promise.all([
         sb.from("profiles").select("*", { count: "exact", head: true }),
         sb.from("stores").select("id, name, slug, status"),
         sb.from("stores").select("*", { count: "exact", head: true }).eq("status", "pending"),
         sb.from("products").select("*", { count: "exact", head: true }).eq("status", "active"),
         sb.from("orders").select("total, status, store_id, stripe_transfer_status"),
+        sb.from("reviews").select("*", { count: "exact", head: true }).eq("is_visible", false),
+        sb.from("dispute_cases").select("*", { count: "exact", head: true }).in("status", ["open", "investigating", "vendor_action_required", "refund_pending"]),
       ]);
 
       const orders = (ordersRes.data ?? []) as AdminOrderSummary[];
@@ -95,6 +100,9 @@ export default function AdminDashboard() {
         exceptionOrders,
         unresolvedReturns,
         payoutAlerts,
+        hiddenReviews: hiddenReviewsRes.count ?? 0,
+        openDisputes: disputesRes.count ?? 0,
+        suspendedVendors: stores.filter((store) => store.status === "suspended").length,
       });
       setRiskQueue(
         [...riskMap.values()]
@@ -121,6 +129,11 @@ export default function AdminDashboard() {
     { label: "Exception orders", value: stats.exceptionOrders, detail: "delivery failures and return flows", icon: AlertTriangle },
     { label: "Unresolved returns", value: stats.unresolvedReturns, detail: "return flows still open", icon: ShieldAlert },
     { label: "Payout alerts", value: stats.payoutAlerts, detail: "delivered orders not yet settled", icon: DollarSign },
+  ];
+  const governanceCards = [
+    { label: "Open disputes", value: stats.openDisputes, detail: "cases needing investigation or refund action", icon: Scale, href: "/admin/disputes" },
+    { label: "Hidden reviews", value: stats.hiddenReviews, detail: "reviews removed from buyer-facing visibility", icon: EyeOff, href: "/admin/moderation" },
+    { label: "Suspended vendors", value: stats.suspendedVendors, detail: "stores currently restricted from trading", icon: Store, href: "/admin/vendors" },
   ];
 
   if (loading) return <div className="grid gap-4 sm:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-28 animate-pulse bg-stone-100 dark:bg-stone-800" />)}</div>;
@@ -207,6 +220,25 @@ export default function AdminDashboard() {
             </Card>
           ))}
         </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        {governanceCards.map((card) => (
+          <Link key={card.label} href={card.href}>
+            <Card className="p-5 transition-colors hover:bg-stone-50 dark:hover:bg-stone-900/80">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-widest text-stone-400">{card.label}</p>
+                  <p className="mt-3 text-2xl font-medium text-stone-900 dark:text-white">{card.value}</p>
+                  <p className="mt-1 text-xs text-stone-500">{card.detail}</p>
+                </div>
+                <div className="rounded-full bg-stone-100 p-3 text-stone-700 dark:bg-stone-800 dark:text-stone-300">
+                  <card.icon className="h-5 w-5" />
+                </div>
+              </div>
+            </Card>
+          </Link>
+        ))}
       </div>
     </motion.div>
   );
