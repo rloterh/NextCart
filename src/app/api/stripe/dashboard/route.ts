@@ -1,13 +1,21 @@
-import { NextResponse } from "next/server";
+import { createPlatformBoundaryErrorResponse } from "@/lib/platform/boundaries";
+import { getRequestTrace, jsonWithTrace, logPlatformEvent } from "@/lib/platform/observability";
 import { createPlatformCapabilityErrorResponse } from "@/lib/platform/readiness.server";
 import { createDashboardLink } from "@/lib/stripe/server";
 import { getSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const trace = getRequestTrace(request);
   try {
     const user = await getServerUser();
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return createPlatformBoundaryErrorResponse(trace, {
+        status: 401,
+        error: "Unauthorized",
+        boundaryClass: "permission",
+        operatorGuidance: "Sign in with the vendor account that owns the connected store before opening Stripe Express.",
+        detail: "Stripe dashboard access is restricted to authenticated store owners.",
+      });
     }
 
     const supabase = await getSupabaseServerClient();
@@ -18,13 +26,32 @@ export async function GET() {
       .single();
 
     if (!store?.stripe_account_id) {
-      return NextResponse.json({ error: "Stripe is not connected for this store" }, { status: 400 });
+      return createPlatformBoundaryErrorResponse(trace, {
+        status: 400,
+        error: "Stripe is not connected for this store",
+        boundaryClass: "config",
+        operatorGuidance: "Finish vendor Stripe onboarding before opening the Stripe dashboard.",
+        detail: "The current store does not yet have a connected Stripe account id.",
+      });
     }
 
     const url = await createDashboardLink(store.stripe_account_id);
-    return NextResponse.json({ url });
+    logPlatformEvent({
+      level: "info",
+      message: "Created Stripe dashboard link",
+      trace,
+      detail: { hasStripeAccount: true },
+    });
+    return jsonWithTrace(trace, { url });
   } catch (error) {
-    console.error("Stripe dashboard error:", error);
-    return createPlatformCapabilityErrorResponse(error, "Unable to open Stripe dashboard");
+    logPlatformEvent({
+      level: "error",
+      message: "Stripe dashboard link failed",
+      trace,
+      detail: error instanceof Error ? error.message : error,
+    });
+    const response = createPlatformCapabilityErrorResponse(error, "Unable to open Stripe dashboard");
+    response.headers.set("x-request-id", trace.requestId);
+    return response;
   }
 }

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { exportPlatformData, isAutomationSecretValid } from "@/lib/platform/automation";
+import { createPlatformBoundaryErrorResponse } from "@/lib/platform/boundaries";
+import { getRequestTrace, logPlatformEvent } from "@/lib/platform/observability";
 import { createPlatformCapabilityErrorResponse } from "@/lib/platform/readiness.server";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
@@ -44,9 +46,16 @@ async function resolveOperatorContext(request: Request) {
 }
 
 export async function GET(request: Request) {
+  const trace = getRequestTrace(request);
   const context = await resolveOperatorContext(request);
   if (!context) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return createPlatformBoundaryErrorResponse(trace, {
+      status: 401,
+      error: "Unauthorized",
+      boundaryClass: "permission",
+      operatorGuidance: "Use an admin or vendor session, or provide the automation secret for scheduled export runs.",
+      detail: "Export handoffs are restricted to signed-in operators or secret-backed automation calls.",
+    });
   }
 
   const { searchParams } = new URL(request.url);
@@ -61,11 +70,23 @@ export async function GET(request: Request) {
   const agedOnly = searchParams.get("agedOnly") === "true";
 
   if (!kind) {
-    return NextResponse.json({ error: "kind is required" }, { status: 400 });
+    return createPlatformBoundaryErrorResponse(trace, {
+      status: 400,
+      error: "kind is required",
+      boundaryClass: "dependency",
+      operatorGuidance: "Choose a concrete export handoff kind before retrying this route.",
+      detail: "The export request did not include a kind query parameter.",
+    });
   }
 
   if (format !== "csv" && format !== "json") {
-    return NextResponse.json({ error: "Unsupported format" }, { status: 400 });
+    return createPlatformBoundaryErrorResponse(trace, {
+      status: 400,
+      error: "Unsupported format",
+      boundaryClass: "dependency",
+      operatorGuidance: "Use csv or json when generating operator handoff exports.",
+      detail: `Received unsupported format: ${format}.`,
+    });
   }
 
   try {
@@ -90,9 +111,18 @@ export async function GET(request: Request) {
       headers: {
         "Content-Type": exportFile.contentType,
         "Content-Disposition": `attachment; filename="${exportFile.filename}"`,
+        "x-request-id": trace.requestId,
       },
     });
   } catch (error) {
-    return createPlatformCapabilityErrorResponse(error, "Unable to create export handoff");
+    logPlatformEvent({
+      level: "error",
+      message: "Platform export generation failed",
+      trace,
+      detail: error instanceof Error ? error.message : error,
+    });
+    const response = createPlatformCapabilityErrorResponse(error, "Unable to create export handoff");
+    response.headers.set("x-request-id", trace.requestId);
+    return response;
   }
 }

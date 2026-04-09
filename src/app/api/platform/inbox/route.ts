@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { getDisputeSlaState, isActiveDispute } from "@/lib/admin/governance";
 import {
   applyNotificationStateToItems,
@@ -16,6 +15,8 @@ import {
 import { getPayoutAnomaly, getPayoutState } from "@/lib/orders/payout-state";
 import { renderOrderCommunicationTemplate } from "@/lib/orders/communication-templates";
 import { orderStatusCopy } from "@/lib/orders/status-copy";
+import { createPlatformBoundaryErrorResponse } from "@/lib/platform/boundaries";
+import { getRequestTrace, jsonWithTrace, logPlatformEvent } from "@/lib/platform/observability";
 import { getServerPlatformChecks } from "@/lib/platform/readiness.server";
 import { getStoreProfileContent } from "@/lib/storefront/store-profile";
 import { getSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
@@ -560,10 +561,17 @@ function buildAdminItems({
   return items;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const trace = getRequestTrace(request);
   const user = await getServerUser();
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return createPlatformBoundaryErrorResponse(trace, {
+      status: 401,
+      error: "Unauthorized",
+      boundaryClass: "permission",
+      operatorGuidance: "Sign in before opening the platform inbox or changing notification state.",
+      detail: "Inbox access is limited to authenticated buyers, vendors, and admins.",
+    });
   }
 
   const supabase = await getSupabaseServerClient();
@@ -574,7 +582,19 @@ export async function GET() {
     .single();
 
   if (profileError || !profile) {
-    return NextResponse.json({ error: profileError?.message ?? "Profile unavailable" }, { status: 400 });
+    logPlatformEvent({
+      level: "warn",
+      message: "Inbox GET could not resolve current profile",
+      trace,
+      detail: profileError?.message ?? "Profile unavailable",
+    });
+    return createPlatformBoundaryErrorResponse(trace, {
+      status: 400,
+      error: profileError?.message ?? "Profile unavailable",
+      boundaryClass: "permission",
+      operatorGuidance: "Verify the signed-in profile still exists and retains a supported marketplace role.",
+      detail: "The platform inbox could not map the current user to a usable profile record.",
+    });
   }
 
   const currentProfile = profile as InboxProfile;
@@ -588,10 +608,17 @@ export async function GET() {
       .limit(12);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return createPlatformBoundaryErrorResponse(trace, {
+        status: 400,
+        error: error.message,
+        boundaryClass: "dependency",
+        operatorGuidance: "Retry the buyer inbox after confirming order data and profile access are healthy.",
+        detail: "The inbox could not load buyer order events from the current Supabase session.",
+      });
     }
 
-    return NextResponse.json(
+    return jsonWithTrace(
+      trace,
       await createInboxResponse(
         currentProfile.id,
         buildBuyerItems(
@@ -613,7 +640,8 @@ export async function GET() {
       .single();
 
     if (storeError || !store) {
-      return NextResponse.json(
+      return jsonWithTrace(
+        trace,
         createInboxPayload([], {
           persistenceAvailable: false,
           emailDeliveryAvailable: getEmailDeliveryAvailable(),
@@ -646,10 +674,17 @@ export async function GET() {
 
     const firstError = [ordersRes.error, disputesRes.error, moderationRes.error].find(Boolean);
     if (firstError) {
-      return NextResponse.json({ error: firstError.message }, { status: 400 });
+      return createPlatformBoundaryErrorResponse(trace, {
+        status: 400,
+        error: firstError.message,
+        boundaryClass: "dependency",
+        operatorGuidance: "Retry the vendor inbox after confirming store, order, and dispute queries are healthy.",
+        detail: "The inbox could not assemble vendor operational events from the current runtime data.",
+      });
     }
 
-    return NextResponse.json(
+    return jsonWithTrace(
+      trace,
       await createInboxResponse(
         currentProfile.id,
         buildVendorItems({
@@ -694,10 +729,17 @@ export async function GET() {
 
   const firstError = [ordersRes.error, disputesRes.error, moderationRes.error].find(Boolean);
   if (firstError) {
-    return NextResponse.json({ error: firstError.message }, { status: 400 });
+    return createPlatformBoundaryErrorResponse(trace, {
+      status: 400,
+      error: firstError.message,
+      boundaryClass: "dependency",
+      operatorGuidance: "Retry the admin inbox after confirming dispute, order, and moderation data are healthy.",
+      detail: "The inbox could not assemble operator events from the current governance and finance datasets.",
+    });
   }
 
-  return NextResponse.json(
+  return jsonWithTrace(
+    trace,
     await createInboxResponse(
       currentProfile.id,
       buildAdminItems({
@@ -721,9 +763,16 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
+  const trace = getRequestTrace(request);
   const user = await getServerUser();
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return createPlatformBoundaryErrorResponse(trace, {
+      status: 401,
+      error: "Unauthorized",
+      boundaryClass: "permission",
+      operatorGuidance: "Sign in before changing inbox read or archive state.",
+      detail: "Inbox state mutations are limited to authenticated marketplace accounts.",
+    });
   }
 
   const payload = (await request.json().catch(() => null)) as
@@ -734,10 +783,13 @@ export async function PATCH(request: Request) {
   const itemIds = payload?.itemIds ?? (payload?.itemId ? [payload.itemId] : []);
 
   if (!state || !["unread", "read", "archived"].includes(state) || itemIds.length === 0) {
-    return NextResponse.json(
-      { error: "Provide a notification state and at least one item id." },
-      { status: 400 }
-    );
+    return createPlatformBoundaryErrorResponse(trace, {
+      status: 400,
+      error: "Provide a notification state and at least one item id.",
+      boundaryClass: "dependency",
+      operatorGuidance: "Include a target inbox state and one or more notification item ids when updating inbox persistence.",
+      detail: "The inbox PATCH payload was incomplete.",
+    });
   }
 
   const supabase = await getSupabaseServerClient();
@@ -748,17 +800,23 @@ export async function PATCH(request: Request) {
 
   if (error) {
     if (isMissingNotificationStateTable(error.message)) {
-      return NextResponse.json(
-        {
-          error:
-            "Notification persistence is not ready yet. Apply supabase-notification-state-schema.sql before changing inbox state.",
-        },
-        { status: 503 }
-      );
+      return createPlatformBoundaryErrorResponse(trace, {
+        status: 503,
+        error: "Notification persistence is not ready yet. Apply supabase-notification-state-schema.sql before changing inbox state.",
+        boundaryClass: "migration",
+        operatorGuidance: "Apply the notification-state migration before treating inbox read and archive actions as durable.",
+        detail: error.message,
+      });
     }
 
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return createPlatformBoundaryErrorResponse(trace, {
+      status: 400,
+      error: error.message,
+      boundaryClass: "dependency",
+      operatorGuidance: "Retry the inbox state update after confirming notification persistence dependencies are healthy.",
+      detail: "The notification-state upsert failed.",
+    });
   }
 
-  return NextResponse.json({ success: true });
+  return jsonWithTrace(trace, { success: true });
 }

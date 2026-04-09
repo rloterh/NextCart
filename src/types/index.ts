@@ -50,6 +50,19 @@ export interface AdminAction {
   admin?: Pick<Profile, "id" | "full_name" | "email"> | null;
 }
 
+export type AdminActionSensitivity = "standard" | "elevated" | "high";
+
+export interface AdminActionAuditMetadata {
+  trace_id: string;
+  sensitivity: AdminActionSensitivity;
+  actor_role: UserRole | "system";
+  route: string | null;
+  queue_href: string | null;
+  capability: string | null;
+  reason_provided: boolean;
+  recorded_at: string;
+}
+
 // ============================================
 // STORE TYPES
 // ============================================

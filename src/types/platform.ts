@@ -53,6 +53,104 @@ export interface PlatformReadinessPayload {
   events: PlatformEventDefinition[];
 }
 
+export type PlatformSystemStatus = "healthy" | "attention" | "critical";
+
+export interface PlatformSystemAction {
+  id: string;
+  label: string;
+  description: string;
+  href: string;
+}
+
+export type PlatformIncidentClass =
+  | "config_blocker"
+  | "automation_delivery"
+  | "payout_pressure"
+  | "governance_pressure";
+
+export type PlatformIncidentSeverity = "low" | "medium" | "high";
+
+export interface PlatformSystemSignal {
+  id: string;
+  label: string;
+  value: string;
+  description: string;
+  tone: PlatformNotificationTone;
+}
+
+export interface PlatformIncidentHandoff {
+  id: string;
+  title: string;
+  summary: string;
+  failureClass: PlatformIncidentClass;
+  severity: PlatformIncidentSeverity;
+  requestId: string;
+  operatorGuidance: string;
+  nextSteps: string[];
+  queueLinks: PlatformSystemAction[];
+  supportBundleHref: string;
+}
+
+export type PlatformBoundaryClass = "config" | "permission" | "migration" | "dependency";
+export type PlatformBoundaryStatus = "healthy" | "attention" | "blocked";
+
+export interface PlatformBoundaryDiagnostic {
+  id: string;
+  label: string;
+  boundaryClass: PlatformBoundaryClass;
+  status: PlatformBoundaryStatus;
+  summary: string;
+  detail: string;
+  operatorGuidance: string;
+  href: string | null;
+}
+
+export type PlatformRunbookWorkflow =
+  | "config_recovery"
+  | "automation_delivery"
+  | "payout_reconciliation"
+  | "governance_escalation";
+
+export interface PlatformEscalationRunbook {
+  id: string;
+  title: string;
+  workflow: PlatformRunbookWorkflow;
+  summary: string;
+  owner: string;
+  severity: PlatformIncidentSeverity;
+  checklist: string[];
+  queueLinks: PlatformSystemAction[];
+  exportLinks: PlatformSystemAction[];
+}
+
+export interface PlatformSupportCaseBundle {
+  id: string;
+  incidentId: string;
+  title: string;
+  requestId: string;
+  generatedAt: string;
+  summary: string;
+  operatorGuidance: string;
+  runbookId: string;
+  exportLinks: PlatformSystemAction[];
+  queueLinks: PlatformSystemAction[];
+}
+
+export interface PlatformSystemPayload {
+  requestId: string;
+  generatedAt: string;
+  status: PlatformSystemStatus;
+  summary: PlatformReadinessSummary;
+  readinessChecks: PlatformCapabilityCheck[];
+  automationSummary: PlatformAutomationPayload | null;
+  signals: PlatformSystemSignal[];
+  actions: PlatformSystemAction[];
+  incidents: PlatformIncidentHandoff[];
+  boundaries: PlatformBoundaryDiagnostic[];
+  runbooks: PlatformEscalationRunbook[];
+  supportBundles: PlatformSupportCaseBundle[];
+}
+
 export type PlatformNotificationTone = "info" | "success" | "warning" | "danger" | "muted";
 export type PlatformNotificationState = "unread" | "read" | "archived";
 

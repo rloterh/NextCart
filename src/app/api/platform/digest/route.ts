@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
 import { createPlatformCapabilityErrorResponse } from "@/lib/platform/readiness.server";
+import { createPlatformBoundaryErrorResponse } from "@/lib/platform/boundaries";
+import { getRequestTrace, jsonWithTrace, logPlatformEvent } from "@/lib/platform/observability";
 import { getDigestPayloadForProfile, sendDigestForProfile } from "@/lib/platform/digest-service";
 import { getSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
 import type { Profile } from "@/types";
@@ -29,16 +30,30 @@ async function getAuthenticatedProfile() {
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const trace = getRequestTrace(request);
   const context = await getAuthenticatedProfile();
   if (!context) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return createPlatformBoundaryErrorResponse(trace, {
+      status: 401,
+      error: "Unauthorized",
+      boundaryClass: "permission",
+      operatorGuidance: "Sign in with an operator account before previewing or sending platform digests.",
+      detail: "Digest surfaces are available only to authenticated admin or vendor operators.",
+    });
   }
 
   try {
-    return NextResponse.json(await getDigestPayloadForProfile(context.supabase, context.profile));
+    return jsonWithTrace(trace, await getDigestPayloadForProfile(context.supabase, context.profile));
   } catch (digestError) {
-    return NextResponse.json(
+    logPlatformEvent({
+      level: "error",
+      message: "Platform digest GET failed",
+      trace,
+      detail: digestError instanceof Error ? digestError.message : digestError,
+    });
+    return jsonWithTrace(
+      trace,
       { error: digestError instanceof Error ? digestError.message : "Unable to build platform digest." },
       { status: 400 }
     );
@@ -46,9 +61,16 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const trace = getRequestTrace(request);
   const context = await getAuthenticatedProfile();
   if (!context) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return createPlatformBoundaryErrorResponse(trace, {
+      status: 401,
+      error: "Unauthorized",
+      boundaryClass: "permission",
+      operatorGuidance: "Sign in with an operator account before previewing or sending platform digests.",
+      detail: "Digest surfaces are available only to authenticated admin or vendor operators.",
+    });
   }
 
   const body = (await request.json().catch(() => null)) as { scope?: "self" | "policy" } | null;
@@ -61,12 +83,20 @@ export async function POST(request: Request) {
       scope,
     });
 
-    return NextResponse.json({
+    return jsonWithTrace(trace, {
       success: true,
       recipientCount: result.recipientCount,
       scope,
     });
   } catch (sendError) {
-    return createPlatformCapabilityErrorResponse(sendError, "Unable to send platform digest");
+    logPlatformEvent({
+      level: "error",
+      message: "Platform digest POST failed",
+      trace,
+      detail: sendError instanceof Error ? sendError.message : sendError,
+    });
+    const response = createPlatformCapabilityErrorResponse(sendError, "Unable to send platform digest");
+    response.headers.set("x-request-id", trace.requestId);
+    return response;
   }
 }

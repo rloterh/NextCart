@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, DollarSign, Package, ShieldAlert } from "lucide-react";
 import { Card, CardTitle } from "@/components/ui/card";
@@ -40,6 +41,10 @@ type AdminRiskOrder = Pick<
   store: Pick<Store, "id" | "name" | "slug" | "status"> | null;
   items: Pick<OrderItem, "id">[] | null;
 };
+
+function isReviewFilter(value: string | null): value is ReviewFilter {
+  return value === "all" || value === "exceptions" || value === "returns" || value === "payout_alerts";
+}
 
 function getOrderRiskReasons(order: AdminRiskOrder) {
   const reasons: string[] = [];
@@ -83,6 +88,9 @@ function getLatestOperationalEvent(order: AdminRiskOrder) {
 }
 
 export default function AdminOrdersPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [orders, setOrders] = useState<AdminRiskOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +123,33 @@ export default function AdminOrdersPage() {
   useEffect(() => {
     void fetchOrders();
   }, [fetchOrders]);
+
+  useEffect(() => {
+    const nextFilter = searchParams.get("view");
+    if (isReviewFilter(nextFilter) && nextFilter !== filter) {
+      setFilter(nextFilter);
+      return;
+    }
+
+    if (!nextFilter && filter !== "all") {
+      setFilter("all");
+    }
+  }, [filter, searchParams]);
+
+  const updateFilter = useCallback(
+    (nextFilter: ReviewFilter) => {
+      setFilter(nextFilter);
+      const params = new URLSearchParams(searchParams.toString());
+      if (nextFilter === "all") {
+        params.delete("view");
+      } else {
+        params.set("view", nextFilter);
+      }
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
 
   const flaggedOrders = useMemo(
     () => orders.filter((order) => getOrderRiskReasons(order).length > 0),
@@ -220,7 +255,7 @@ export default function AdminOrdersPage() {
             <button
               key={tab.value}
               type="button"
-              onClick={() => setFilter(tab.value)}
+              onClick={() => updateFilter(tab.value)}
               className={`px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-colors ${
                 filter === tab.value
                   ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900"
