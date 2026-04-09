@@ -87,7 +87,7 @@ export const PLATFORM_CAPABILITY_DEFINITIONS: PlatformCapabilityDefinition[] = [
     label: "Scheduled automation",
     description: "Secret-backed automation triggers for recurring digests, stale-work reminders, and governance handoff jobs.",
     requiredEnv: [],
-    optionalEnv: ["PLATFORM_AUTOMATION_SECRET"],
+    optionalEnv: ["PLATFORM_AUTOMATION_SECRET", "CRON_SECRET"],
     audience: ["vendor", "admin"],
   },
 ];

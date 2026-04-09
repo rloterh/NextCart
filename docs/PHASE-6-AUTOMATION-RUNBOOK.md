@@ -6,6 +6,8 @@ This runbook turns the Phase 6 readiness, digest, and automation work into a dep
 
 - `PLATFORM_AUTOMATION_SECRET`
   Use a strong shared secret for scheduled or external automation triggers.
+- `CRON_SECRET`
+  Recommended when Vercel Cron is the scheduler.
 - `RESEND_API_KEY`
 - `NOTIFICATION_FROM_EMAIL`
 - `ADMIN_DIGEST_EMAILS`

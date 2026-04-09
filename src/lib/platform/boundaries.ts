@@ -88,7 +88,7 @@ export async function buildPlatformBoundaryDiagnostics({
       boundaryClass: "permission",
       status: "healthy",
       summary: "Admin-only diagnostics, automation handoffs, and governance queues are protected behind role checks and optional secret-gated scheduled access.",
-      detail: "If an operator sees 401 or 403 responses, verify the signed-in role first, then confirm any scheduled request includes PLATFORM_AUTOMATION_SECRET.",
+      detail: "If an operator sees 401 or 403 responses, verify the signed-in role first, then confirm any scheduled request includes PLATFORM_AUTOMATION_SECRET or CRON_SECRET.",
       operatorGuidance: "Treat permission failures separately from platform failures so support does not chase the wrong root cause.",
       href: "/admin/system",
     }),
@@ -206,7 +206,7 @@ export async function buildPlatformBoundaryDiagnostics({
       detail:
         automationSummary && automationSummary.emailDeliveryAvailable && automationSummary.automationSecretConfigured
           ? "Cron-safe automation triggers and digest delivery boundaries are configured."
-          : "Confirm email delivery setup and PLATFORM_AUTOMATION_SECRET before treating automation reminders as fully live.",
+          : "Confirm email delivery setup and PLATFORM_AUTOMATION_SECRET or CRON_SECRET before treating automation reminders as fully live.",
       operatorGuidance: "Use the dashboard automation panel for previews until delivery dependencies are fully configured.",
       href: "/admin/dashboard",
     })

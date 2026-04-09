@@ -4,7 +4,7 @@ A curated multi-vendor e-commerce marketplace built with Next.js, Supabase, Sani
 
 ## Tech Stack
 
-- **Framework:** Next.js 16 (App Router, React 19, TypeScript)
+- **Framework:** Next.js 15 (App Router, React 19, TypeScript)
 - **Styling:** Tailwind CSS 4, Framer Motion, GSAP (Phase 2+)
 - **State:** Zustand 5 (auth, cart, UI stores)
 - **Database:** Supabase (PostgreSQL + Auth + Realtime + RLS + Storage)
@@ -29,6 +29,24 @@ cp .env.example .env.local  # Fill in keys
 # Paste supabase-schema.sql in Supabase SQL Editor
 npm run dev
 ```
+
+## Deploying To Vercel
+
+NexCart is prepared for Vercel deployment with:
+
+- Next.js framework detection
+- production security headers in [vercel.json](./vercel.json)
+- Node `20.x` runtime guidance in [package.json](./package.json)
+- launch-readiness checks for Supabase, Stripe, Sanity, notifications, and automation
+
+Deployment checklist:
+
+1. import the repository into Vercel
+2. enable Automatically expose System Environment Variables
+3. add the environment variables listed in [.env.example](./.env.example)
+4. apply the required Supabase SQL migrations before production rollout
+5. configure the Stripe production webhook to `/api/stripe/webhooks`
+6. use the post-deploy checklist in [docs/VERCEL-DEPLOYMENT.md](./docs/VERCEL-DEPLOYMENT.md)
 
 ## Project Structure
 

@@ -287,17 +287,19 @@ function buildJobs(
 }
 
 function getAutomationSecretConfigured() {
-  return Boolean(process.env.PLATFORM_AUTOMATION_SECRET?.trim());
+  return Boolean(process.env.PLATFORM_AUTOMATION_SECRET?.trim() || process.env.CRON_SECRET?.trim());
 }
 
 export function isAutomationSecretValid(request: Request) {
-  const configured = process.env.PLATFORM_AUTOMATION_SECRET?.trim();
-  if (!configured) {
+  const configuredSecrets = [process.env.PLATFORM_AUTOMATION_SECRET?.trim(), process.env.CRON_SECRET?.trim()].filter(
+    (value): value is string => Boolean(value)
+  );
+  if (configuredSecrets.length === 0) {
     return false;
   }
 
   const authorization = request.headers.get("authorization");
-  return authorization === `Bearer ${configured}`;
+  return configuredSecrets.some((secret) => authorization === `Bearer ${secret}`);
 }
 
 export async function fetchNotificationStates(

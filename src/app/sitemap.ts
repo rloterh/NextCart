@@ -1,7 +1,8 @@
 import type { MetadataRoute } from "next";
+import { getPublicAppUrl } from "@/lib/platform/readiness.public";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+const BASE_URL = getPublicAppUrl();
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const supabase = await getSupabaseServerClient();

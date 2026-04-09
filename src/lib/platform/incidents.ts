@@ -116,7 +116,7 @@ export function derivePlatformIncidents({
           nextSteps: [
             automationSummary.automationSecretConfigured
               ? "Scheduled trigger secret is configured."
-              : "Add PLATFORM_AUTOMATION_SECRET before wiring cron or external runners.",
+              : "Add PLATFORM_AUTOMATION_SECRET or CRON_SECRET before wiring cron or external runners.",
             automationSummary.emailDeliveryAvailable
               ? "Email delivery boundary is ready."
               : "Finish notification delivery setup before relying on digest escalation emails.",

@@ -1,6 +1,7 @@
+import { getPublicAppUrl } from "@/lib/platform/readiness.public";
 import type { Product, Store, Category } from "@/types";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+const APP_URL = getPublicAppUrl();
 
 // ============================================
 // JSON-LD STRUCTURED DATA

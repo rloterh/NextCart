@@ -22,6 +22,14 @@ function readPublicEnv(): Record<PublicEnvKey, string | undefined> {
   };
 }
 
+function getServerCanonicalHost() {
+  if (typeof window !== "undefined") {
+    return null;
+  }
+
+  return process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || null;
+}
+
 export function getPublicPlatformChecks(): PlatformCapabilityCheck[] {
   const env = readPublicEnv();
   return PLATFORM_CAPABILITY_DEFINITIONS
@@ -34,7 +42,17 @@ export function getPublicAppName() {
 }
 
 export function getPublicAppUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const explicit = process.env.NEXT_PUBLIC_APP_URL;
+  if (explicit) {
+    return explicit;
+  }
+
+  const vercelHost = getServerCanonicalHost();
+  if (vercelHost) {
+    return `https://${vercelHost}`;
+  }
+
+  return "http://localhost:3000";
 }
 
 export function getPublicSupabaseConfig() {
