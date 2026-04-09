@@ -50,3 +50,39 @@ export interface PlatformReadinessPayload {
   summary: PlatformReadinessSummary;
   events: PlatformEventDefinition[];
 }
+
+export type PlatformNotificationTone = "info" | "success" | "warning" | "danger" | "muted";
+
+export interface PlatformEventTemplate {
+  key: PlatformEventKey;
+  subject: string;
+  preheader: string;
+  headline: string;
+  body: string;
+  ctaLabel: string;
+}
+
+export interface PlatformInboxItem {
+  id: string;
+  eventKey: PlatformEventKey;
+  audience: PlatformAudience;
+  tone: PlatformNotificationTone;
+  title: string;
+  description: string;
+  createdAt: string;
+  href: string | null;
+  actionLabel: string | null;
+  channels: PlatformEventChannel[];
+  emailTemplate: PlatformEventTemplate | null;
+}
+
+export interface PlatformInboxSummary {
+  total: number;
+  urgent: number;
+  attention: number;
+}
+
+export interface PlatformInboxPayload {
+  items: PlatformInboxItem[];
+  summary: PlatformInboxSummary;
+}
