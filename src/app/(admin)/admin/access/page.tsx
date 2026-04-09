@@ -8,17 +8,21 @@ import { PageIntro, PageTransition } from "@/components/ui/page-shell";
 import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { StatusBadge, ToneBadge } from "@/components/ui/status-badge";
 import { usePlatformAccess } from "@/hooks/use-platform-access";
+import { filterPlatformAccessActions } from "@/lib/platform/access";
 import { formatDate } from "@/lib/utils/constants";
 
-const accessFilters = [
-  { label: "All changes", value: "all" as const },
-  { label: "Admin transitions", value: "admin" as const },
-  { label: "Missing rationale", value: "missing_reason" as const },
-  { label: "Missing trace", value: "missing_trace" as const },
-  { label: "Escalation markers", value: "escalation" as const },
+const accessReviewPresets = [
+  { label: "All changes", value: "all" as const, filters: {} },
+  { label: "Last 24 hours", value: "last_24h" as const, filters: { daysWindow: 1 } },
+  { label: "Last 7 days", value: "last_7d" as const, filters: { daysWindow: 7 } },
+  { label: "Last 30 days", value: "last_30d" as const, filters: { daysWindow: 30 } },
+  { label: "Admin transitions", value: "admin" as const, filters: { adminTransitionsOnly: true } },
+  { label: "Missing rationale", value: "missing_reason" as const, filters: { requiresReason: true } },
+  { label: "Missing trace", value: "missing_trace" as const, filters: { requiresTrace: true } },
+  { label: "Escalation markers", value: "escalation" as const, filters: { escalationsOnly: true } },
 ];
 
-type AccessReviewFilter = (typeof accessFilters)[number]["value"];
+type AccessReviewFilter = (typeof accessReviewPresets)[number]["value"];
 
 function getGuardrailTone(status: "healthy" | "attention" | "blocked") {
   switch (status) {
@@ -45,33 +49,22 @@ function getSensitivityTone(sensitivity: "standard" | "elevated" | "high") {
 export default function AdminAccessPage() {
   const { data, loading, error, refetch } = usePlatformAccess();
   const [reviewFilter, setReviewFilter] = useState<AccessReviewFilter>("all");
+  const activePreset = accessReviewPresets.find((entry) => entry.value === reviewFilter) ?? accessReviewPresets[0];
 
   const visibleActions = useMemo(() => {
     if (!data) return [];
-    return data.recentActions.filter((action) => {
-      switch (reviewFilter) {
-        case "admin":
-          return action.fromRole === "admin" || action.toRole === "admin";
-        case "missing_reason":
-          return !action.reasonProvided;
-        case "missing_trace":
-          return !action.requestId;
-        case "escalation":
-          return action.requiresEscalation;
-        default:
-          return true;
-      }
-    });
-  }, [data, reviewFilter]);
+    return filterPlatformAccessActions(data.recentActions, activePreset.filters);
+  }, [activePreset.filters, data]);
 
   const exportHref = useMemo(() => {
     const params = new URLSearchParams({ format: "csv" });
-    if (reviewFilter === "admin") params.set("adminTransitionsOnly", "true");
-    if (reviewFilter === "missing_reason") params.set("requiresReason", "true");
-    if (reviewFilter === "missing_trace") params.set("requiresTrace", "true");
-    if (reviewFilter === "escalation") params.set("escalationsOnly", "true");
+    if (activePreset.filters.adminTransitionsOnly) params.set("adminTransitionsOnly", "true");
+    if (activePreset.filters.requiresReason) params.set("requiresReason", "true");
+    if (activePreset.filters.requiresTrace) params.set("requiresTrace", "true");
+    if (activePreset.filters.escalationsOnly) params.set("escalationsOnly", "true");
+    if (activePreset.filters.daysWindow) params.set("daysWindow", String(activePreset.filters.daysWindow));
     return `/api/platform/access/export?${params.toString()}`;
-  }, [reviewFilter]);
+  }, [activePreset.filters]);
 
   if (loading) {
     return (
@@ -189,8 +182,9 @@ export default function AdminAccessPage() {
             <div className="border-b border-stone-100 px-5 py-4 dark:border-stone-800">
               <p className="text-xs font-medium uppercase tracking-widest text-stone-400">Recent privileged access changes</p>
               <p className="mt-1 text-sm text-stone-500">Use this as the evidence trail for role changes and later compliance review.</p>
+              <p className="mt-2 text-xs uppercase tracking-wider text-stone-400">{visibleActions.length} event(s) in the current review preset</p>
               <div className="mt-3 flex flex-wrap gap-1">
-                {accessFilters.map((entry) => (
+                {accessReviewPresets.map((entry) => (
                   <button
                     key={entry.value}
                     type="button"

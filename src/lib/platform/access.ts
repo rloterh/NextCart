@@ -44,6 +44,7 @@ export interface PlatformAccessFilters {
   requiresTrace?: boolean;
   adminTransitionsOnly?: boolean;
   escalationsOnly?: boolean;
+  daysWindow?: number | null;
 }
 
 function normalizeFilterMode<T extends string>(value: T | undefined, fallback: T) {
@@ -57,6 +58,12 @@ export function filterPlatformAccessActions(
   const sensitivity = normalizeFilterMode(filters.sensitivity, "all");
 
   return actions.filter((action) => {
+    if (filters.daysWindow) {
+      const ageMs = Date.now() - new Date(action.createdAt).getTime();
+      if (ageMs > filters.daysWindow * 24 * 60 * 60 * 1000) {
+        return false;
+      }
+    }
     if (sensitivity !== "all" && action.sensitivity !== sensitivity) {
       return false;
     }
@@ -147,7 +154,7 @@ export async function buildPlatformAccessPayload({
       .select("id, action, entity_type, entity_id, reason, metadata, created_at, admin:profiles(id, full_name, email)")
       .eq("entity_type", "profile")
       .order("created_at", { ascending: false })
-      .limit(12),
+      .limit(80),
   ]);
 
   if (profilesRes.error) {

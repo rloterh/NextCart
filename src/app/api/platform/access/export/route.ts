@@ -12,6 +12,14 @@ function normalizeFormat(value: string | null) {
   return value === "json" ? "json" : "csv";
 }
 
+function normalizeDaysWindow(value: string | null) {
+  const parsed = value ? Number(value) : null;
+  if (!parsed || Number.isNaN(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+}
+
 export async function GET(request: Request) {
   const trace = getRequestTrace(request);
   const user = await getServerUser();
@@ -58,6 +66,7 @@ export async function GET(request: Request) {
       requiresTrace: searchParams.get("requiresTrace") === "true",
       adminTransitionsOnly: searchParams.get("adminTransitionsOnly") === "true",
       escalationsOnly: searchParams.get("escalationsOnly") === "true",
+      daysWindow: normalizeDaysWindow(searchParams.get("daysWindow")),
     });
 
     const exportFile = formatPlatformAccessExport(format, filteredActions);
