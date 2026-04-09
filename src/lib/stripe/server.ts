@@ -1,4 +1,6 @@
 import Stripe from "stripe";
+import { getPublicAppUrl } from "@/lib/platform/readiness.public";
+import { requirePlatformCapability } from "@/lib/platform/readiness.server";
 
 let stripeClient: Stripe | null = null;
 
@@ -7,10 +9,8 @@ const PLATFORM_FEE_PERCENT = Number(process.env.STRIPE_PLATFORM_FEE_PERCENT ?? 1
 export function getStripeServerClient() {
   if (stripeClient) return stripeClient;
 
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-  if (!secretKey) {
-    throw new Error("Missing STRIPE_SECRET_KEY");
-  }
+  requirePlatformCapability("stripe_server");
+  const secretKey = process.env.STRIPE_SECRET_KEY!;
 
   stripeClient = new Stripe(secretKey, {
     apiVersion: "2024-12-18.acacia",
@@ -23,7 +23,9 @@ export function getStripeServerClient() {
 export async function createConnectOnboardingLink(
   storeId: string, storeName: string, email: string, existingAccountId?: string | null
 ): Promise<{ accountId: string; url: string }> {
+  requirePlatformCapability("stripe_vendor_payouts");
   const stripe = getStripeServerClient();
+  const appUrl = getPublicAppUrl();
   let accountId = existingAccountId;
   if (!accountId) {
     const account = await stripe.accounts.create({
@@ -36,8 +38,8 @@ export async function createConnectOnboardingLink(
   }
   const link = await stripe.accountLinks.create({
     account: accountId,
-    refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/vendor/settings?stripe=refresh`,
-    return_url: `${process.env.NEXT_PUBLIC_APP_URL}/vendor/settings?stripe=success`,
+    refresh_url: `${appUrl}/vendor/settings?stripe=refresh`,
+    return_url: `${appUrl}/vendor/settings?stripe=success`,
     type: "account_onboarding",
   });
   return { accountId, url: link.url };
@@ -47,6 +49,7 @@ export async function createCheckoutPaymentIntent(params: {
   amount: number; currency: string; vendorStripeAccountId: string;
   orderId: string; buyerEmail: string;
 }): Promise<{ clientSecret: string; paymentIntentId: string }> {
+  requirePlatformCapability("stripe_checkout");
   const stripe = getStripeServerClient();
   const platformFee = Math.round(params.amount * (PLATFORM_FEE_PERCENT / 100));
   const paymentIntent = await stripe.paymentIntents.create({
@@ -67,6 +70,7 @@ export function calculatePlatformFee(amount: number): number {
 }
 
 export async function createDashboardLink(accountId: string): Promise<string> {
+  requirePlatformCapability("stripe_vendor_payouts");
   const stripe = getStripeServerClient();
   const link = await stripe.accounts.createLoginLink(accountId);
   return link.url;

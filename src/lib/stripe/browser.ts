@@ -1,6 +1,13 @@
 import { loadStripe, type Stripe } from "@stripe/stripe-js";
+import { getStripePublishableKey } from "@/lib/platform/readiness.public";
+
 let stripePromise: Promise<Stripe | null> | null = null;
+
 export function getStripe(): Promise<Stripe | null> {
-  if (!stripePromise) stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "");
+  const publishableKey = getStripePublishableKey();
+  if (!publishableKey) {
+    return Promise.resolve(null);
+  }
+  if (!stripePromise) stripePromise = loadStripe(publishableKey);
   return stripePromise;
 }

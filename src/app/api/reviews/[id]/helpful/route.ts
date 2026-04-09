@@ -1,16 +1,13 @@
-import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
+import { getPublicSupabaseConfig } from "@/lib/platform/readiness.public";
+import { createPlatformCapabilityErrorResponse, requirePlatformCapability } from "@/lib/platform/readiness.server";
 import { getServerUser } from "@/lib/supabase/server";
 
 function getSupabaseAdminClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("Missing Supabase admin environment variables");
-  }
-
-  return createClient(supabaseUrl, serviceRoleKey);
+  requirePlatformCapability("supabase_admin");
+  const { url } = getPublicSupabaseConfig();
+  return createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {
@@ -67,6 +64,6 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
     return NextResponse.json({ helpfulCount: nextHelpfulCount });
   } catch (error) {
     console.error("Review helpful vote error:", error);
-    return NextResponse.json({ error: "Unable to save helpful vote" }, { status: 500 });
+    return createPlatformCapabilityErrorResponse(error, "Unable to save helpful vote");
   }
 }

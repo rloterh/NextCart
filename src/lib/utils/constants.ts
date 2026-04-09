@@ -1,5 +1,7 @@
-export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "NexCart";
-export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+import { getPublicAppName, getPublicAppUrl } from "@/lib/platform/readiness.public";
+
+export const APP_NAME = getPublicAppName();
+export const APP_URL = getPublicAppUrl();
 
 export const PROTECTED_ROUTES = ["/vendor", "/admin", "/account"];
 export const VENDOR_ROUTES = ["/vendor"];

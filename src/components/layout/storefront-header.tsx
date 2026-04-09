@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Heart, Menu, Search, ShoppingBag, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AccountMenu } from "@/components/layout/account-menu";
+import { NotificationCenter } from "@/components/platform/notification-center";
 import { cn } from "@/lib/utils/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { useCartStore } from "@/stores/cart-store";
@@ -82,6 +83,10 @@ export function StorefrontHeader() {
             >
               <Search className="h-[18px] w-[18px]" />
             </button>
+
+            {isAuthenticated ? (
+              <NotificationCenter />
+            ) : null}
 
             {isAuthenticated ? (
               <Link href="/account/wishlist" className="rounded-sm p-2 text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white">

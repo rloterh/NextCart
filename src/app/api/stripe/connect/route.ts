@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createPlatformCapabilityErrorResponse } from "@/lib/platform/readiness.server";
 import { getSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
 import { createConnectOnboardingLink } from "@/lib/stripe/server";
 
@@ -22,6 +23,6 @@ export async function POST() {
     return NextResponse.json({ url });
   } catch (error) {
     console.error("Connect error:", error);
-    return NextResponse.json({ error: "Failed to create onboarding link" }, { status: 500 });
+    return createPlatformCapabilityErrorResponse(error, "Failed to create onboarding link");
   }
 }

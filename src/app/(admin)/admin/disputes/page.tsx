@@ -9,6 +9,7 @@ import { PriorityBadge, ToneBadge } from "@/components/ui/status-badge";
 import { SkeletonBlock, StatePanel } from "@/components/ui/state-panel";
 import { recordAdminAction } from "@/lib/admin/audit";
 import { getDisputeSlaState, getSlaToneClasses } from "@/lib/admin/governance";
+import { getDisputeEscalationMessage } from "@/lib/platform/notifications";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUIStore } from "@/stores/ui-store";
 import { formatDate, formatPrice } from "@/lib/utils/constants";
@@ -212,6 +213,12 @@ export default function AdminDisputesPage() {
     critical: cases.filter((entry) => entry.priority === "critical").length,
     resolved: cases.filter((entry) => entry.status === "resolved").length,
   };
+  const activeCases = cases.filter((entry) => !["resolved", "dismissed"].includes(entry.status));
+  const disputeEscalation = getDisputeEscalationMessage({
+    breaches: activeCases.filter((entry) => getDisputeSlaState(entry.created_at, entry.priority, entry.status).tone === "danger").length,
+    atRisk: activeCases.filter((entry) => getDisputeSlaState(entry.created_at, entry.priority, entry.status).tone === "warning").length,
+    unassigned: activeCases.filter((entry) => !entry.assigned_admin_id).length,
+  });
 
   async function getCurrentAdminId() {
     const supabase = getSupabaseBrowserClient();
@@ -357,6 +364,13 @@ export default function AdminDisputesPage() {
 
       {migrationRequired && <Card className="border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-900/10 dark:text-amber-200">The dispute workflow needs the governance SQL migration before it can run. Apply <code>supabase-governance-foundation.sql</code> and reload this page.</Card>}
       {workflowMigrationRequired && <Card className="border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-900/10 dark:text-amber-200">The dispute foundation is available, but advanced refund decision and payout-hold fields need <code>supabase-governance-workflows.sql</code> before those controls can save.</Card>}
+      {disputeEscalation ? (
+        <StatePanel
+          title={disputeEscalation.title}
+          description={disputeEscalation.description}
+          tone={disputeEscalation.tone}
+        />
+      ) : null}
 
       <div className="flex items-center gap-1">
         {[{ label: "Existing cases", value: "cases" as const }, { label: "Open new case", value: "new_case" as const }].map((entry) => (
