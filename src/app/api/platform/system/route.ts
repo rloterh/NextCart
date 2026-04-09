@@ -1,4 +1,5 @@
 import { buildPlatformAutomationPayload } from "@/lib/platform/automation";
+import { buildPlatformBoundaryDiagnostics, createPlatformBoundaryErrorResponse } from "@/lib/platform/boundaries";
 import { derivePlatformIncidents } from "@/lib/platform/incidents";
 import { getRequestTrace, jsonWithTrace, logPlatformEvent } from "@/lib/platform/observability";
 import { getPlatformReadinessPayload } from "@/lib/platform/readiness.server";
@@ -13,7 +14,13 @@ export async function GET(request: Request) {
   const user = await getServerUser();
 
   if (!user) {
-    return jsonWithTrace(trace, { error: "Unauthorized", requestId: trace.requestId }, { status: 401 });
+    return createPlatformBoundaryErrorResponse(trace, {
+      status: 401,
+      error: "Unauthorized",
+      boundaryClass: "permission",
+      operatorGuidance: "Sign in with an admin account before using system diagnostics.",
+      detail: "System diagnostics are available only to authenticated admin operators.",
+    });
   }
 
   const supabase = await getSupabaseServerClient();
@@ -24,7 +31,13 @@ export async function GET(request: Request) {
     .single();
 
   if (error || profile?.role !== "admin") {
-    return jsonWithTrace(trace, { error: "Forbidden", requestId: trace.requestId }, { status: 403 });
+    return createPlatformBoundaryErrorResponse(trace, {
+      status: 403,
+      error: "Forbidden",
+      boundaryClass: "permission",
+      operatorGuidance: "Use an admin profile when investigating platform diagnostics or routing support incidents.",
+      detail: "The current account does not satisfy the admin-only permission boundary for this route.",
+    });
   }
 
   try {
@@ -131,6 +144,11 @@ export async function GET(request: Request) {
         readiness,
         automationSummary,
         requestId: trace.requestId,
+      }),
+      boundaries: await buildPlatformBoundaryDiagnostics({
+        supabase,
+        readinessChecks: readiness.checks,
+        automationSummary,
       }),
     };
 

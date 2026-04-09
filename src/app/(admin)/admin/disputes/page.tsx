@@ -327,7 +327,18 @@ export default function AdminDisputesPage() {
       return;
     }
 
-    await recordAdminAction(supabase, { adminId, action: "dispute.create", entityType: "dispute_case", entityId: data.id, reason: summary, metadata: { orderNumber: selectedOrder.order_number, issueType, priority } });
+    await recordAdminAction(supabase, {
+      adminId,
+      action: "dispute.create",
+      entityType: "dispute_case",
+      entityId: data.id,
+      reason: summary,
+      metadata: { orderNumber: selectedOrder.order_number, issueType, priority },
+      sensitivity: "elevated",
+      route: "/admin/disputes",
+      queueHref: "/admin/disputes",
+      capability: "dispute_workflow",
+    });
     addToast({ type: "success", title: "Dispute case opened", description: "The case was added to the governance queue." });
     setSummary("");
     setRequestedResolution("");
@@ -392,6 +403,11 @@ export default function AdminDisputesPage() {
         payoutHoldStatus: selectedCase.payout_hold_status,
         assignedAdminId: selectedCase.assigned_admin_id || adminId,
       },
+      sensitivity:
+        selectedCase.refund_decision === "issued" || selectedCase.payout_hold_status === "on_hold" ? "high" : "elevated",
+      route: "/admin/disputes",
+      queueHref: selectedCase.assigned_admin_id ? "/admin/disputes?owner=assigned" : "/admin/disputes?owner=unassigned",
+      capability: "dispute_workflow",
     });
     addToast({ type: "success", title: "Dispute case updated", description: "The workflow state and notes were saved." });
     await fetchDisputes();

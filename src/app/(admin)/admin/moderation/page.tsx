@@ -280,7 +280,18 @@ export default function AdminModerationPage() {
     const changes = action === "activate" ? { status: "active" } : action === "pause" ? { status: "paused" } : { is_featured: action === "feature" };
     const { error: updateError } = await supabase.from("products").update(changes).eq("id", product.id);
     if (!updateError) {
-      await recordAdminAction(supabase, { adminId, action: `moderation.${action}`, entityType: "product", entityId: product.id, reason: policyReason, metadata: { productName: product.name, nextState: changes } });
+      await recordAdminAction(supabase, {
+        adminId,
+        action: `moderation.${action}`,
+        entityType: "product",
+        entityId: product.id,
+        reason: policyReason,
+        metadata: { productName: product.name, nextState: changes },
+        sensitivity: "elevated",
+        route: "/admin/moderation",
+        queueHref: "/admin/moderation?view=product",
+        capability: "governance_moderation",
+      });
       addToast({ type: "success", title: "Product moderated", description: `${product.name} was updated successfully.` });
       setPolicyReason("");
       await fetchQueue();
@@ -299,7 +310,18 @@ export default function AdminModerationPage() {
     const { error: updateError } = await supabase.from("stores").update({ status: nextStatus }).eq("id", vendor.id);
     if (!updateError && nextStatus === "approved") await supabase.from("profiles").update({ role: "vendor" }).eq("id", vendor.owner_id);
     if (!updateError) {
-      await recordAdminAction(supabase, { adminId, action: `vendor.${action}`, entityType: "vendor", entityId: vendor.id, reason: policyReason, metadata: { storeName: vendor.name, nextStatus } });
+      await recordAdminAction(supabase, {
+        adminId,
+        action: `vendor.${action}`,
+        entityType: "vendor",
+        entityId: vendor.id,
+        reason: policyReason,
+        metadata: { storeName: vendor.name, nextStatus },
+        sensitivity: action === "suspend" ? "high" : "elevated",
+        route: "/admin/moderation",
+        queueHref: "/admin/moderation?view=vendor",
+        capability: "vendor_governance",
+      });
       addToast({ type: "success", title: "Vendor updated", description: `${vendor.name} is now ${nextStatus}.` });
       setPolicyReason("");
       await fetchQueue();
@@ -317,7 +339,18 @@ export default function AdminModerationPage() {
     const nextVisibility = action === "restore";
     const { error: updateError } = await supabase.from("reviews").update({ is_visible: nextVisibility }).eq("id", review.id);
     if (!updateError) {
-      await recordAdminAction(supabase, { adminId, action: `review.${action}`, entityType: "review", entityId: review.id, reason: policyReason, metadata: { rating: review.rating, nextVisibility } });
+      await recordAdminAction(supabase, {
+        adminId,
+        action: `review.${action}`,
+        entityType: "review",
+        entityId: review.id,
+        reason: policyReason,
+        metadata: { rating: review.rating, nextVisibility },
+        sensitivity: "elevated",
+        route: "/admin/moderation",
+        queueHref: "/admin/moderation?view=review",
+        capability: "review_moderation",
+      });
       addToast({ type: "success", title: nextVisibility ? "Review restored" : "Review hidden", description: "Storefront review visibility has been updated." });
       setPolicyReason("");
       await fetchQueue();

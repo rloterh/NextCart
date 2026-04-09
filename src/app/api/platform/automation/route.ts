@@ -3,6 +3,7 @@ import {
   isAutomationSecretValid,
   runPlatformAutomationJob,
 } from "@/lib/platform/automation";
+import { createPlatformBoundaryErrorResponse } from "@/lib/platform/boundaries";
 import { sendDigestForProfile } from "@/lib/platform/digest-service";
 import { getRequestTrace, jsonWithTrace, logPlatformEvent } from "@/lib/platform/observability";
 import { createPlatformCapabilityErrorResponse, getServerPlatformChecks } from "@/lib/platform/readiness.server";
@@ -80,7 +81,13 @@ export async function GET(request: Request) {
   const trace = getRequestTrace(request);
   const context = await resolveOperatorContext(request);
   if (!context) {
-    return jsonWithTrace(trace, { error: "Unauthorized" }, { status: 401 });
+    return createPlatformBoundaryErrorResponse(trace, {
+      status: 401,
+      error: "Unauthorized",
+      boundaryClass: "permission",
+      operatorGuidance: "Use an operator session with admin or vendor role, or provide the automation secret for scheduled runs.",
+      detail: "Automation previews and trigger runs are limited to approved operators and secret-backed jobs.",
+    });
   }
 
   try {
@@ -138,12 +145,24 @@ export async function POST(request: Request) {
   const trace = getRequestTrace(request);
   const context = await resolveOperatorContext(request);
   if (!context) {
-    return jsonWithTrace(trace, { error: "Unauthorized" }, { status: 401 });
+    return createPlatformBoundaryErrorResponse(trace, {
+      status: 401,
+      error: "Unauthorized",
+      boundaryClass: "permission",
+      operatorGuidance: "Use an operator session with admin or vendor role, or provide the automation secret for scheduled runs.",
+      detail: "Automation previews and trigger runs are limited to approved operators and secret-backed jobs.",
+    });
   }
 
   const body = (await request.json().catch(() => null)) as { jobKey?: PlatformAutomationJobKey } | null;
   if (!body?.jobKey) {
-    return jsonWithTrace(trace, { error: "jobKey is required" }, { status: 400 });
+    return createPlatformBoundaryErrorResponse(trace, {
+      status: 400,
+      error: "jobKey is required",
+      boundaryClass: "dependency",
+      operatorGuidance: "Specify which automation job you want to preview or trigger before retrying.",
+      detail: "The automation request body was missing jobKey.",
+    });
   }
 
   try {

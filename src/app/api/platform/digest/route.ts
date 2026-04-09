@@ -1,4 +1,5 @@
 import { createPlatformCapabilityErrorResponse } from "@/lib/platform/readiness.server";
+import { createPlatformBoundaryErrorResponse } from "@/lib/platform/boundaries";
 import { getRequestTrace, jsonWithTrace, logPlatformEvent } from "@/lib/platform/observability";
 import { getDigestPayloadForProfile, sendDigestForProfile } from "@/lib/platform/digest-service";
 import { getSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
@@ -33,7 +34,13 @@ export async function GET(request: Request) {
   const trace = getRequestTrace(request);
   const context = await getAuthenticatedProfile();
   if (!context) {
-    return jsonWithTrace(trace, { error: "Unauthorized" }, { status: 401 });
+    return createPlatformBoundaryErrorResponse(trace, {
+      status: 401,
+      error: "Unauthorized",
+      boundaryClass: "permission",
+      operatorGuidance: "Sign in with an operator account before previewing or sending platform digests.",
+      detail: "Digest surfaces are available only to authenticated admin or vendor operators.",
+    });
   }
 
   try {
@@ -57,7 +64,13 @@ export async function POST(request: Request) {
   const trace = getRequestTrace(request);
   const context = await getAuthenticatedProfile();
   if (!context) {
-    return jsonWithTrace(trace, { error: "Unauthorized" }, { status: 401 });
+    return createPlatformBoundaryErrorResponse(trace, {
+      status: 401,
+      error: "Unauthorized",
+      boundaryClass: "permission",
+      operatorGuidance: "Sign in with an operator account before previewing or sending platform digests.",
+      detail: "Digest surfaces are available only to authenticated admin or vendor operators.",
+    });
   }
 
   const body = (await request.json().catch(() => null)) as { scope?: "self" | "policy" } | null;

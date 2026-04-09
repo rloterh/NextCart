@@ -90,6 +90,20 @@ export interface PlatformIncidentHandoff {
   queueLinks: PlatformSystemAction[];
 }
 
+export type PlatformBoundaryClass = "config" | "permission" | "migration" | "dependency";
+export type PlatformBoundaryStatus = "healthy" | "attention" | "blocked";
+
+export interface PlatformBoundaryDiagnostic {
+  id: string;
+  label: string;
+  boundaryClass: PlatformBoundaryClass;
+  status: PlatformBoundaryStatus;
+  summary: string;
+  detail: string;
+  operatorGuidance: string;
+  href: string | null;
+}
+
 export interface PlatformSystemPayload {
   requestId: string;
   generatedAt: string;
@@ -100,6 +114,7 @@ export interface PlatformSystemPayload {
   signals: PlatformSystemSignal[];
   actions: PlatformSystemAction[];
   incidents: PlatformIncidentHandoff[];
+  boundaries: PlatformBoundaryDiagnostic[];
 }
 
 export type PlatformNotificationTone = "info" | "success" | "warning" | "danger" | "muted";
