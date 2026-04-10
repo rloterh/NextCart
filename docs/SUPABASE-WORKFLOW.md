@@ -18,6 +18,38 @@ npm run supabase:push -- --confirm-prod
 npm run supabase:pull -- sync_manual_prod_change
 ```
 
+## Shortcuts
+
+Optional wrappers are available if you prefer shorter commands.
+
+`Makefile` examples:
+
+```bash
+make supabase-status
+make supabase-check
+make supabase-link
+make supabase-new name=add_vendor_payout_hold
+make supabase-push
+make supabase-pull name=sync_manual_prod_change
+```
+
+PowerShell examples:
+
+```powershell
+./scripts/supabase.ps1 status
+./scripts/supabase.ps1 check
+./scripts/supabase.ps1 link
+./scripts/supabase.ps1 new add_vendor_payout_hold
+./scripts/supabase.ps1 push
+./scripts/supabase.ps1 pull sync_manual_prod_change
+```
+
+Notes:
+
+- `make` is optional and may not be installed on every Windows machine.
+- If PowerShell blocks local scripts, you can still use the npm commands directly.
+- These wrappers do not bypass any production safety checks; they delegate to the npm workflow.
+
 ## Recommended flow
 
 1. Create a local migration with `npm run supabase:new -- <name>`.
