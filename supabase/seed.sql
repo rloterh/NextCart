@@ -1,0 +1,1 @@
+-- Seed data is intentionally tracked through migrations for now.

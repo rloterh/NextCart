@@ -26,9 +26,11 @@ A curated multi-vendor e-commerce marketplace built with Next.js, Supabase, Sani
 git clone https://github.com/yourusername/nexcart.git
 cd nexcart && npm install
 cp .env.example .env.local  # Fill in keys
-# Paste supabase-schema.sql in Supabase SQL Editor
+# Apply the ordered SQL files in supabase/migrations to your Supabase project
 npm run dev
 ```
+
+For the ongoing database workflow, use the tracked Supabase CLI setup in [docs/SUPABASE-WORKFLOW.md](./docs/SUPABASE-WORKFLOW.md).
 
 ## Deploying To Vercel
 
@@ -44,7 +46,7 @@ Deployment checklist:
 1. import the repository into Vercel
 2. enable Automatically expose System Environment Variables
 3. add the environment variables listed in [.env.example](./.env.example)
-4. apply the required Supabase SQL migrations before production rollout
+4. apply the ordered SQL migrations in [`supabase/migrations`](./supabase/migrations) before production rollout
 5. configure the Stripe production webhook to `/api/stripe/webhooks`
 6. use the post-deploy checklist in [docs/VERCEL-DEPLOYMENT.md](./docs/VERCEL-DEPLOYMENT.md)
 

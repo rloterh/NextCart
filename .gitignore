@@ -3,6 +3,8 @@ node_modules/
 out/
 build/
 .env
+.env.supabase
+.env.supabase.local
 .env.local
 .env.*.local
 .DS_Store
