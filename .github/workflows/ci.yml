@@ -24,6 +24,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
       - run: npm ci
+      - run: npm run supabase:check
       - run: npm run lint
       - run: npx tsc --noEmit
       - run: npx prettier --check "src/**/*.{ts,tsx,css,json}"

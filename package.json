@@ -13,7 +13,13 @@
     "test": "vitest run",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "typecheck": "tsc --noEmit",
-    "prepare": "husky"
+    "prepare": "husky",
+    "supabase:check": "node scripts/check-supabase-workflow.mjs",
+    "supabase:status": "node scripts/supabase-workflow.mjs status",
+    "supabase:new": "node scripts/supabase-workflow.mjs new",
+    "supabase:link": "node scripts/supabase-workflow.mjs link",
+    "supabase:push": "node scripts/supabase-workflow.mjs push",
+    "supabase:pull": "node scripts/supabase-workflow.mjs pull"
   },
   "dependencies": {
     "next": "^15.1.0",
