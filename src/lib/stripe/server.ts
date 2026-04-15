@@ -65,6 +65,18 @@ export async function createCheckoutPaymentIntent(params: {
   return { clientSecret: paymentIntent.client_secret!, paymentIntentId: paymentIntent.id };
 }
 
+export async function cancelCheckoutPaymentIntent(paymentIntentId: string): Promise<void> {
+  requirePlatformCapability("stripe_checkout");
+  const stripe = getStripeServerClient();
+  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+  if (paymentIntent.status === "canceled" || paymentIntent.status === "succeeded") {
+    return;
+  }
+
+  await stripe.paymentIntents.cancel(paymentIntentId);
+}
+
 export function calculatePlatformFee(amount: number): number {
   return Math.round(amount * (PLATFORM_FEE_PERCENT / 100));
 }

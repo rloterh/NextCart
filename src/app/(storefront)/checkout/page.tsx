@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { CreditCard, Lock, Mail, ShieldCheck, Truck } from "lucide-react";
+import { CreditCard, Lock, Mail, ShieldCheck, Truck, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { StatePanel } from "@/components/ui/state-panel";
+import { useAuth } from "@/hooks/use-auth";
 import { formatPrice } from "@/lib/utils/constants";
 import { useCartStore } from "@/stores/cart-store";
 import { useUIStore } from "@/stores/ui-store";
@@ -14,6 +16,7 @@ import type { CheckoutShippingAddress } from "@/types/orders";
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { items, subtotal, clearCart } = useCartStore();
   const addToast = useUIStore((state) => state.addToast);
   const [loading, setLoading] = useState(false);
@@ -72,9 +75,33 @@ export default function CheckoutPage() {
         throw new Error(data.error);
       }
 
+      const orderNumbers = Array.isArray(data.orders)
+        ? data.orders
+            .map((order: { orderNumber?: string }) => order.orderNumber)
+            .filter((value: string | undefined): value is string => !!value)
+        : [];
+      const orderIds = Array.isArray(data.orders)
+        ? data.orders
+            .map((order: { orderId?: string }) => order.orderId)
+            .filter((value: string | undefined): value is string => !!value)
+        : [];
+
+      if (orderIds.length === 0) {
+        throw new Error("Checkout created the order, but no payment step could be prepared.");
+      }
+
       clearCart();
-      addToast({ type: "success", title: "Order placed!" });
-      router.push(`/checkout/success?order=${data.orders?.[0]?.orderNumber ?? ""}`);
+      addToast({
+        type: "success",
+        title: orderNumbers.length > 1 ? "Orders ready for payment" : "Order ready for payment",
+        description:
+          "Shipping details are saved. Complete the Stripe payment step next so each vendor order can move into fulfillment.",
+      });
+
+      const params = new URLSearchParams();
+      orderIds.forEach((orderId: string) => params.append("orderId", orderId));
+      params.set("count", String(orderNumbers.length || 1));
+      router.push(`/checkout/payment?${params.toString()}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unexpected checkout error";
       addToast({ type: "error", title: "Checkout failed", description: message });
@@ -93,12 +120,37 @@ export default function CheckoutPage() {
     return null;
   }
 
+  if (isAuthLoading) {
+    return (
+      <div className="mx-auto max-w-5xl px-6 py-20">
+        <StatePanel
+          title="Restoring your buyer session"
+          description="We are checking your account context before preparing checkout."
+        />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="mx-auto max-w-5xl px-6 py-20">
+        <StatePanel
+          title="Sign in before checkout"
+          description="Checkout is tied to your buyer account so orders, payment updates, and vendor delivery milestones stay visible in one place."
+          actionLabel="Go to login"
+          actionIcon={User}
+          onAction={() => router.push("/login?redirect=/checkout")}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
       <div className="max-w-2xl">
         <h1 className="font-serif text-3xl text-stone-900 dark:text-white">Checkout</h1>
         <p className="mt-3 text-sm leading-relaxed text-stone-500">
-          Secure your order with clear shipping expectations, Stripe-protected payment handling, and post-purchase updates that keep every step visible.
+          Capture shipping details now, then complete the Stripe payment step next so every vendor order moves cleanly into the marketplace fulfillment flow.
         </p>
       </div>
 
@@ -125,10 +177,10 @@ export default function CheckoutPage() {
             <h2 className="mb-4 text-xs font-medium uppercase tracking-widest text-stone-400">Payment</h2>
             <div className="flex items-center gap-3 border border-dashed border-stone-200 p-4 text-sm text-stone-500 dark:border-stone-700">
               <CreditCard className="h-5 w-5 text-stone-400" />
-              Stripe Elements integration - card form renders here in production
+              This step prepares a Stripe payment request for each vendor order. You will confirm payment on the next screen before any vendor starts fulfillment.
             </div>
             <div className="mt-3 flex items-center gap-1.5 text-xs text-stone-400">
-              <Lock className="h-3 w-3" /> Secured by Stripe. Your data is encrypted and payment is split correctly for each marketplace vendor.
+              <Lock className="h-3 w-3" /> Secured by Stripe. Order records stay pending until each vendor payment step is confirmed.
             </div>
           </Card>
 
@@ -138,8 +190,8 @@ export default function CheckoutPage() {
               {[
                 {
                   icon: ShieldCheck,
-                  title: "Payment confirmation",
-                  description: "You will get an order confirmation after the payment intent is created and accepted.",
+                  title: "Payment step",
+                  description: "The next screen collects Stripe payment confirmation for each vendor order created from this cart.",
                 },
                 {
                   icon: Truck,
@@ -175,9 +227,16 @@ export default function CheckoutPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm text-stone-900 dark:text-white">{item.product.name}</p>
-                    <p className="text-xs text-stone-400">Qty: {item.quantity}</p>
+                    <p className="text-xs text-stone-400">
+                      Qty: {item.quantity}
+                      {item.variant?.name ? ` - ${item.variant.name}` : ""}
+                    </p>
                   </div>
-                  <p className="text-sm font-medium">{formatPrice(Number(item.product.price) * item.quantity)}</p>
+                  <p className="text-sm font-medium">
+                    {formatPrice(
+                      (Number(item.product.price) + (item.variant ? Number(item.variant.price_adjustment) : 0)) * item.quantity
+                    )}
+                  </p>
                 </div>
               ))}
             </div>
@@ -203,7 +262,7 @@ export default function CheckoutPage() {
               Shipping confirmation, tracking details, and support context will be available from your order history after purchase.
             </div>
             <Button type="submit" isLoading={loading} className="mt-6 w-full" size="lg">
-              Place secure order
+              Continue to payment
             </Button>
           </div>
         </div>
