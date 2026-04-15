@@ -12,7 +12,7 @@
     "lint": "next lint",
     "test": "vitest run",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "prepare": "husky",
     "supabase:check": "node scripts/check-supabase-workflow.mjs",
     "supabase:status": "node scripts/supabase-workflow.mjs status",

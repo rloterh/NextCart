@@ -26,7 +26,7 @@ jobs:
       - run: npm ci
       - run: npm run supabase:check
       - run: npm run lint
-      - run: npx tsc --noEmit
+      - run: npm run typecheck
       - run: npx prettier --check "src/**/*.{ts,tsx,css,json}"
 
   build:
