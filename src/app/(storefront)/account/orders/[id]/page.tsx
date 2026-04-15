@@ -182,11 +182,18 @@ export default function BuyerOrderDetailPage() {
         title={order.order_number}
         description={`Placed ${formatDate(order.created_at)} - ${order.store?.name ?? "Marketplace order"}`}
         actions={
-          <Link href="/account/orders">
-            <Button variant="ghost" leftIcon={<ArrowLeft className="h-4 w-4" />}>
-              Back to orders
-            </Button>
-          </Link>
+          <div className="flex flex-wrap justify-end gap-3">
+            {order.status === "pending" ? (
+              <Link href={`/checkout/payment?orderId=${order.id}`}>
+                <Button>Complete payment</Button>
+              </Link>
+            ) : null}
+            <Link href="/account/orders">
+              <Button variant="ghost" leftIcon={<ArrowLeft className="h-4 w-4" />}>
+                Back to orders
+              </Button>
+            </Link>
+          </div>
         }
       />
 
