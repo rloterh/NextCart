@@ -94,7 +94,25 @@ export default async function HomePage() {
             </div>
           </div>
 
-          <div className="relative min-h-[420px] overflow-hidden border border-stone-200 bg-stone-200 dark:border-stone-800 dark:bg-stone-950">
+          <div className="relative min-h-[420px] overflow-hidden border border-stone-200 bg-stone-900 dark:border-stone-800 dark:bg-stone-950">
+            {!heroImageUrl && (
+              <div className="absolute inset-0">
+                <div className="absolute inset-0 bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950" />
+                <div
+                  className="absolute inset-0 opacity-[0.055]"
+                  style={{
+                    backgroundImage:
+                      "repeating-linear-gradient(0deg,#fff 0px,#fff 1px,transparent 1px,transparent 56px),repeating-linear-gradient(90deg,#fff 0px,#fff 1px,transparent 1px,transparent 56px)",
+                  }}
+                />
+                <div className="absolute right-10 top-10 h-44 w-px bg-amber-700/60" />
+                <div className="absolute right-10 top-10 h-px w-24 bg-amber-700/60" />
+                <div className="absolute bottom-24 left-8 h-px w-12 bg-amber-700/35" />
+                <span className="pointer-events-none absolute -right-6 top-1/2 -translate-y-1/2 select-none font-serif text-[210px] leading-none text-white/[0.03]">
+                  N
+                </span>
+              </div>
+            )}
             {heroImageUrl ? (
               <Image src={heroImageUrl} alt={heroTitle} fill priority sizes="(min-width: 1024px) 460px, 100vw" className="object-cover" />
             ) : null}
