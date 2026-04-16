@@ -425,7 +425,7 @@ const PRODUCTS = [
     stock_quantity: 132,
     is_featured: false,
     tags: ["music", "vinyl", "limited"],
-    images: [UNSPLASH("1526394931762-90052e97b368"), UNSPLASH("1493225458442-4f80bb8abf2e")],
+    images: [UNSPLASH("1539375665275-f9de415ef9ac"), UNSPLASH("1603048588665-791ca8aea617")],
   },
 
   // ============ BEAUTY & HEALTH / FIELDWORK ============
@@ -467,7 +467,7 @@ const PRODUCTS = [
     stock_quantity: 115,
     is_featured: false,
     tags: ["beauty", "bath", "gift"],
-    images: [UNSPLASH("1570194065650-d99fb4bedf0a"), UNSPLASH("1600612253971-422e7f7faeb6")],
+    images: [UNSPLASH("1570172619644-dfd03ed5d881"), UNSPLASH("1507652313519-d4e9174996dd")],
   },
 
   // ============ SPORTS & OUTDOORS / FIELDWORK ============
@@ -624,7 +624,7 @@ const PRODUCTS = [
     stock_quantity: 28,
     is_featured: false,
     tags: ["electronics", "film", "scanner"],
-    images: [UNSPLASH("1617953141905-b27fb1f17b90"), UNSPLASH("1500634245200-e5245c7574ef")],
+    images: [UNSPLASH("1461360228754-6e81c478b882"), UNSPLASH("1452587925148-ce544e77e70d")],
   },
   {
     storeSlug: "circuit-bureau",
